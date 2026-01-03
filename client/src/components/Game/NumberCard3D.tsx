@@ -37,10 +37,11 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({ value, position, isSel
       </mesh>
 
       <group position={[0, 0, 0.02]}>
-         {/* REMOVED FONT URL TO PREVENT HANGING */}
-         <Text fontSize={0.8} color="white">
-           {value}
-         </Text>
+         {value > 0 && ( // Only show text if value is real
+            <Text fontSize={0.8} color="white">
+            {value}
+            </Text>
+        )}
          <Text position={[0, -0.6, 0]} fontSize={0.15} color="#ffffff80">
            TARGET
          </Text>
