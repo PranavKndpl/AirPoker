@@ -1,25 +1,44 @@
+// client/src/components/UI/BettingPanel.tsx
 import React, { useState } from 'react';
 
 interface Props {
   currentBios: number;
   onPlaceBet: (amount: number) => void;
+  onToggleView: () => void; // <--- New Prop
 }
 
-export const BettingPanel: React.FC<Props> = ({ currentBios, onPlaceBet }) => {
+export const BettingPanel: React.FC<Props> = ({ currentBios, onPlaceBet, onToggleView }) => {
   const [bet, setBet] = useState(0);
 
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 50,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'auto',
-      background: 'rgba(0,0,0,0.6)'
+      pointerEvents: 'none' // Allow clicks to pass through outside the box? No, we want modal.
     }}>
+      {/* THE BOX */}
       <div style={{
+        pointerEvents: 'auto',
         background: '#111', border: '1px solid #ffd700', borderRadius: 12,
         padding: 40, width: 400, textAlign: 'center',
-        boxShadow: '0 0 50px rgba(255, 215, 0, 0.2)'
+        boxShadow: '0 0 50px rgba(255, 215, 0, 0.2)',
+        position: 'relative' // For absolute positioning of close button
       }}>
+        
+        {/* CLOSE / VIEW TABLE BUTTON */}
+        <button 
+            onClick={onToggleView}
+            style={{
+                position: 'absolute', top: 10, right: 10,
+                background: 'transparent', border: '1px solid #444', color: '#888',
+                borderRadius: '50%', width: 30, height: 30, cursor: 'pointer',
+                fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="View Table"
+        >
+            👁️
+        </button>
+
         <h2 style={{ color: '#ffd700', fontSize: '2rem', marginBottom: 30, textTransform: 'uppercase' }}>
           Wager Air
         </h2>
@@ -29,20 +48,16 @@ export const BettingPanel: React.FC<Props> = ({ currentBios, onPlaceBet }) => {
         </div>
         <div style={{ color: '#666', marginBottom: 30 }}>BIOS</div>
 
-        {/* Range Slider */}
         <input 
-          type="range" 
-          min="0" 
-          max={currentBios} 
-          value={bet} 
+          type="range" min="0" max={currentBios} value={bet} 
           onChange={(e) => setBet(parseInt(e.target.value))}
           style={{ width: '100%', marginBottom: 30, accentColor: '#ffd700' }}
         />
 
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 30 }}>
-           <button onClick={() => setBet(0)} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Check (0)</button>
-           <button onClick={() => setBet(Math.floor(currentBios/2))} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Half</button>
-           <button onClick={() => setBet(currentBios)} style={{ background: '#500', border: 'none', color: '#faa', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>ALL IN</button>
+            <button onClick={() => setBet(0)} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Check (0)</button>
+            <button onClick={() => setBet(Math.floor(currentBios/2))} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Half</button>
+            <button onClick={() => setBet(currentBios)} style={{ background: '#500', border: 'none', color: '#faa', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>ALL IN</button>
         </div>
 
         <button 

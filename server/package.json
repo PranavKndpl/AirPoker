@@ -13,12 +13,18 @@
   "type": "commonjs",
   "dependencies": {
     "pokersolver": "^2.1.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/socket.io-client": "^1.4.36",
     "nodemon": "^3.1.11",
     "tsx": "^4.21.0"
   }
