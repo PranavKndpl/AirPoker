@@ -73,6 +73,12 @@ export default function App() {
     return sum + (c ? c.value : 0);
   }, 0);
 
+  const handleCloseGrid = () => {
+    setSelectedCardIds([]); 
+    setSelectedTargetId(null);  // <--- This triggers the reverse animation
+    setGameState('SELECTION_TARGET'); 
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000', position: 'relative' }}>
       
@@ -147,6 +153,7 @@ export default function App() {
           selectedIds={selectedCardIds}
           onToggle={handleGridToggle}
           onConfirm={handleSubmit}
+          onClose={handleCloseGrid}
           currentSum={currentSum}
           targetValue={targetVal}
         />
