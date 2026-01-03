@@ -1,32 +1,51 @@
 // server/src/gameLogic.ts
 
-export interface Card {
+export interface PlayingCard {
+  id: string;   // "H-1" (Ace of Hearts)
   suit: '♠' | '♥' | '♣' | '♦';
-  rank: string;
-  value: number; // 1-13 for math
+  rank: string; // "A", "2"..."K"
+  value: number; // 1 to 13
+  usedBy: string | null; // PlayerID who burned this card, or null
 }
 
-const SUITS: ('♠' | '♥' | '♣' | '♦')[] = ['♠', '♥', '♣', '♦'];
-const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+export interface NumberCard {
+  id: string;
+  value: number; // The target sum (e.g., 36)
+  isUsed: boolean;
+}
 
-export const createDeck = (): Card[] => {
-  const deck: Card[] = [];
-  SUITS.forEach(suit => {
-    RANKS.forEach((rank, index) => {
+// Generate the 52 card deck (Shared Resource)
+export const createGlobalDeck = (): PlayingCard[] => {
+  const suits: ('♠' | '♥' | '♣' | '♦')[] = ['♠', '♥', '♣', '♦'];
+  const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  
+  const deck: PlayingCard[] = [];
+  suits.forEach(suit => {
+    ranks.forEach((rank, index) => {
       deck.push({
+        id: `${suit}-${rank}`, // Unique ID
         suit,
         rank,
-        value: index + 1 // A=1, K=13
+        value: index + 1, // A=1, K=13
+        usedBy: null
       });
     });
   });
-  return shuffle(deck);
+  return deck;
 };
 
-const shuffle = (array: any[]) => {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+// Generate 5 Number Cards (Targets) for a player
+// Range: Min valid sum (1+2+3+4+5 = 15) to Max valid sum (9+10+11+12+13 = 55)
+export const createNumberHand = (): NumberCard[] => {
+  const hand: NumberCard[] = [];
+  for (let i = 0; i < 5; i++) {
+    // Random integer between 15 and 55
+    const val = Math.floor(Math.random() * (55 - 15 + 1)) + 15;
+    hand.push({
+      id: `num-${Math.random().toString(36).substr(2, 5)}`,
+      value: val,
+      isUsed: false
+    });
   }
-  return array;
+  return hand;
 };
