@@ -1,16 +1,16 @@
-// client/src/hooks/useGameLogic.ts
 import { useState, useEffect, useMemo } from 'react';
 import { socket } from '../socket';
+// FIX 1: Use 'import type' to satisfy verbatimModuleSyntax
+import type { GamePhase, PlayingCard, NumberCard } from '../../../shared/types'; 
 
-export type PlayingCard = { id: string; suit: string; rank: string; value: number; usedBy: string | null };
-export type NumberCard = { id: string; value: number; isUsed: boolean };
-
-export type GamePhase = 'LOBBY' | 'ACTIVE' | 'RESOLUTION' | 'GAME_OVER';
+// Local UI Steps (These stay Client-Only)
 export type LocalStep = 'PICK_TARGET' | 'BETTING' | 'PICK_HAND' | 'WAITING_FOR_OPPONENT' | 'VIEW_TABLE';
 
 export const useGameLogic = () => {
+  // FIX 2: Use the imported GamePhase type
   const [phase, setPhase] = useState<GamePhase>('LOBBY');
   const [localStep, setLocalStep] = useState<LocalStep>('PICK_TARGET');
+  
   // We need to remember where to go back to when "Viewing Table"
   const [lastStep, setLastStep] = useState<LocalStep>('PICK_TARGET'); 
   
@@ -48,7 +48,8 @@ export const useGameLogic = () => {
         setOpponentBios(data.opponentBios);
         setPot(data.pot);
         
-        setPhase('ACTIVE');
+        // FIX 3: Use 'GAME_LOOP' instead of 'ACTIVE'
+        setPhase('GAME_LOOP'); 
         setLocalStep('PICK_TARGET');
         setOpponentStatus({ targetLocked: false, betPlaced: false, handSubmitted: false });
         setTimer(data.timeRemaining);
@@ -95,16 +96,16 @@ export const useGameLogic = () => {
   
   // Timer
   useEffect(() => {
-     if(phase === 'ACTIVE' && timer > 0) {
+     // FIX 4: Check for 'GAME_LOOP'
+     if(phase === 'GAME_LOOP' && timer > 0) {
         const i = setInterval(() => setTimer(t => t - 1), 1000);
         return () => clearInterval(i);
      }
   }, [phase, timer]);
 
-  // --- HELPER: Calculate Opponent's Real Value (Fix for "Can't see value") ---
+  // --- HELPER ---
   const opponentRevealedValue = useMemo(() => {
       if (!roundResult || !roundResult.opponentTargets) return 0;
-      // The keys in opponentTargets are socket IDs. Find the one that isn't mine.
       const ids = Object.keys(roundResult.opponentTargets);
       const opId = ids.find(id => id !== socket.id);
       return opId ? roundResult.opponentTargets[opId] : 0;
@@ -133,13 +134,10 @@ export const useGameLogic = () => {
         else if (selectedCardIds.length < 5) setSelectedCardIds(prev => [...prev, id]);
      },
      
-     // FIX: Generic toggle that works for Betting AND Grid
      toggleView: () => {
          if (localStep === 'VIEW_TABLE') {
-             // Go back to where we were
              setLocalStep(lastStep);
          } else {
-             // Save current step and go to view
              setLastStep(localStep);
              setLocalStep('VIEW_TABLE');
          }
@@ -167,7 +165,7 @@ export const useGameLogic = () => {
         gameState: phase, roomId, globalDeck, myNumberHand, 
         bios, opponentBios, pot, selectedTargetId, selectedCardIds,
         roundResult, gameOver, targetVal, currentSum,
-        opponentRevealedValue // <--- Passing this to the Scene
+        opponentRevealedValue 
      }, 
      actions 
   };

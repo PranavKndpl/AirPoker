@@ -1,22 +1,19 @@
 // server/src/roomManager.ts
-import { PlayingCard, NumberCard } from "./gameLogic";
+import { PlayingCard, NumberCard, GamePhase } from "../../shared/types";
 
-// 1. ADDED 'GAME_LOOP' to the allowed phases
-export type GamePhase = 'LOBBY' | 'GAME_LOOP' | 'RESOLUTION';
 
 export interface PlayerState {
   numberHand: NumberCard[];
   bios: number;
   currentBet: number;
   targetLocked: boolean;
-  // 2. ADDED isSubmitted to track if they clicked "Confirm Hand"
   isSubmitted: boolean; 
 }
 
 export interface Room {
   id: string;
   players: string[];
-  phase: GamePhase;
+  phase: GamePhase; // Uses the shared type now
   globalDeck: PlayingCard[];
   pot: number;
   mode: 'NORMAL' | 'HARD';
@@ -24,10 +21,8 @@ export interface Room {
   turnData: {
     [playerId: string]: { targetId?: string; bet?: number; cardIds?: string[]; }
   };
-  // 3. ADDED timerInterval to track the server-side clock
   timerInterval?: NodeJS.Timeout; 
 }
-
 const rooms: Record<string, Room> = {};
 const playerDirectory: Record<string, { roomId: string; name: string }> = {};
 

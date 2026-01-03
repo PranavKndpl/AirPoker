@@ -50,7 +50,7 @@ export default function App() {
       <div style={{ position: 'absolute', top: 30, left: 30, pointerEvents: 'none', zIndex: 10 }}>
            <h1 style={{ fontSize: '3rem', fontWeight: 'bold', color: '#ffd700', margin: 0 }}>AIR POKER</h1>
            <div style={{ color: '#888' }}>{roomId ? `ROOM: ${roomId}` : ''}</div>
-           {phase === 'ACTIVE' && <div style={{ fontSize: '2rem', color: timer < 10 ? 'red' : 'white', marginTop: 10 }}>⏳ {timer}s</div>}
+           {phase === 'GAME_LOOP' && <div style={{ fontSize: '2rem', color: timer < 10 ? 'red' : 'white', marginTop: 10 }}>⏳ {timer}s</div>}
       </div>
       
       {phase !== 'LOBBY' && (
@@ -71,7 +71,7 @@ export default function App() {
       {phase === 'LOBBY' && roomId && <div style={{...overlayStyle, pointerEvents: 'none'}}><h2 className="animate-pulse" style={{ fontSize: '2rem', color: '#ffd700' }}>WAITING...</h2></div>}
 
       {/* ACTIVE GAME */}
-      {phase === 'ACTIVE' && (
+      {phase === 'GAME_LOOP' && (
         <>
             {localStep === 'PICK_TARGET' && <div style={{ position: 'absolute', bottom: 100, width: '100%', textAlign: 'center', pointerEvents: 'none', color: '#fff', fontSize: '1.5rem', textShadow: '0 2px 4px #000' }}>SELECT A TARGET SUM</div>}
             

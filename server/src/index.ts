@@ -1,4 +1,3 @@
-// server/src/index.ts
 import { Server, Socket } from "socket.io";
 import { createServer } from "http";
 import { createGlobalDeck, createNumberHand, PlayingCard, NumberCard } from "./gameLogic";
@@ -16,15 +15,21 @@ const toSolverFormat = (card: PlayingCard) => {
   return r + s;
 };
 
-// ... (startNewRound function remains the same) ...
+// --- START ROUND ---
 const startNewRound = (room: Room) => {
+  console.log(`[${room.id}] Starting New Round...`);
   room.phase = "GAME_LOOP";
   room.turnData = {};
-  room.globalDeck = createGlobalDeck();
-  room.pot = 0; 
 
+  // PERSIST DECK: Only create if missing (preserves burned cards)
+  if (!room.globalDeck || room.globalDeck.length === 0) {
+      room.globalDeck = createGlobalDeck();
+  }
+  
+  room.pot = 0; 
   if (room.timerInterval) clearInterval(room.timerInterval);
 
+  // Setup Players
   room.players.forEach((pid) => {
     const pState = room.playerStates[pid];
     pState.numberHand = createNumberHand();
@@ -38,6 +43,7 @@ const startNewRound = (room: Room) => {
     }
   });
 
+  // Notify Clients
   room.players.forEach((pid) => {
     const opId = room.players.find((id) => id !== pid)!;
     io.to(pid).emit("new_round_start", {
@@ -50,82 +56,124 @@ const startNewRound = (room: Room) => {
     });
   });
 
+  // Start Timer
   let timeLeft = ROUND_TIME_SEC;
   room.timerInterval = setInterval(() => {
     timeLeft--;
     if (timeLeft % 10 === 0) io.to(room.id).emit("timer_sync", timeLeft);
     if (timeLeft <= 0) {
       if (room.timerInterval) clearInterval(room.timerInterval);
+      console.log(`[${room.id}] Time expired! Forcing showdown.`);
       forceShowdown(room); 
     }
   }, 1000);
 };
 
-// --- FIXED RESOLUTION LOGIC ---
+// --- RESOLUTION (CRASH PROOFED) ---
 const resolveGame = (room: Room) => {
-  if (room.timerInterval) clearInterval(room.timerInterval);
-  room.phase = "RESOLUTION";
+  try {
+      if (room.timerInterval) clearInterval(room.timerInterval);
+      room.phase = "RESOLUTION";
 
-  const [p1, p2] = room.players;
-  const data1 = room.turnData[p1] || { cardIds: [], targetId: null };
-  const data2 = room.turnData[p2] || { cardIds: [], targetId: null };
-  
-  const cards1 = (data1.cardIds || []).map(id => room.globalDeck.find(c => c.id === id)!);
-  const cards2 = (data2.cardIds || []).map(id => room.globalDeck.find(c => c.id === id)!);
+      const [p1, p2] = room.players;
+      const data1 = room.turnData[p1] || { cardIds: [], targetId: null };
+      const data2 = room.turnData[p2] || { cardIds: [], targetId: null };
+      
+      // SAFE CARD LOOKUP (No '!' assertion)
+      const getCards = (ids: string[] | undefined) => {
+          if (!ids) return [];
+          return ids.map(id => room.globalDeck.find(c => c.id === id)).filter(c => c !== undefined) as PlayingCard[];
+      };
 
-  let result: any;
-  const intersection = data1.cardIds?.filter(id => data2.cardIds?.includes(id)) || [];
+      const cards1 = getCards(data1.cardIds);
+      const cards2 = getCards(data2.cardIds);
 
-  if (cards1.length < 5 || cards2.length < 5) {
-     result = { type: "TIMEOUT", desc: "Incomplete Hand - Round Voided" };
-  } 
-  else if (room.mode === "HARD" && intersection.length > 0) {
-     result = { 
-        winner: null, 
-        type: "OVERLAP", 
-        intersectingCards: intersection, 
-        desc: "AGONY: Overlap Detected",
-        p1Hand: data1.cardIds, // Include hands even on overlap
-        p2Hand: data2.cardIds 
-     };
-  } 
-  else {
-     const h1 = Hand.solve(cards1.map(toSolverFormat));
-     const h2 = Hand.solve(cards2.map(toSolverFormat));
-     const winners = Hand.winners([h1, h2]);
-     
-     let winnerId: string | null = null;
-     if (winners.length === 1) {
-        winnerId = winners[0] === h1 ? p1 : p2;
-        room.playerStates[winnerId].bios += room.pot;
-     }
-     
-     result = {
-        winner: winnerId,
-        type: "WIN",
-        // SHOW ACTUAL HAND NAME (e.g. "Full House")
-        desc: winners.length === 1 ? `${winners[0].descr} wins` : `Draw: ${h1.descr}`,
-        intersectingCards: [],
-        p1Hand: data1.cardIds, // <--- CRITICAL FIX: Send Hand IDs in result
-        p2Hand: data2.cardIds  // <--- CRITICAL FIX: Send Hand IDs in result
-     };
+      let result: any;
+      const intersection = data1.cardIds?.filter(id => data2.cardIds?.includes(id)) || [];
+
+      // TIMEOUT RULES: If you didn't pick 5 cards, you LOSE.
+      const p1Valid = cards1.length === 5;
+      const p2Valid = cards2.length === 5;
+
+      if (!p1Valid && !p2Valid) {
+         result = { winner: null, type: "TIMEOUT", desc: "Double Timeout - Draw" };
+      } 
+      else if (!p1Valid) {
+         result = { winner: p2, type: "WIN", desc: "Opponent Timed Out" };
+         room.playerStates[p2].bios += room.pot;
+      }
+      else if (!p2Valid) {
+         result = { winner: p1, type: "WIN", desc: "Opponent Timed Out" };
+         room.playerStates[p1].bios += room.pot;
+      }
+      // AGONY RULES
+      else if (room.mode === "HARD" && intersection.length > 0) {
+         result = { 
+            winner: null, type: "OVERLAP", 
+            intersectingCards: intersection, desc: "AGONY: Overlap Detected",
+            p1Hand: data1.cardIds, p2Hand: data2.cardIds 
+         };
+      } 
+      // STANDARD POKER
+      else {
+         const h1 = Hand.solve(cards1.map(toSolverFormat));
+         const h2 = Hand.solve(cards2.map(toSolverFormat));
+         const winners = Hand.winners([h1, h2]);
+         
+         let winnerId: string | null = null;
+         if (winners.length === 1) {
+            winnerId = winners[0] === h1 ? p1 : p2;
+            room.playerStates[winnerId].bios += room.pot;
+         }
+         
+         result = {
+            winner: winnerId,
+            type: "WIN",
+            desc: winners.length === 1 ? `${winners[0].descr}` : `Draw: ${h1.descr}`,
+            intersectingCards: [],
+            p1Hand: data1.cardIds,
+            p2Hand: data2.cardIds
+         };
+      }
+
+      // MARK BURNED CARDS
+      const allPlayedIds = [...(data1.cardIds || []), ...(data2.cardIds || [])];
+      allPlayedIds.forEach((id) => {
+          const c = room.globalDeck.find((x) => x.id === id);
+          if (c) c.usedBy = "BURNED";
+      });
+
+      // CHECK BANKRUPTCY
+      let gameOver = null;
+      if (room.playerStates[p1].bios <= 0) gameOver = { winner: p2, reason: "Bankruptcy" };
+      else if (room.playerStates[p2].bios <= 0) gameOver = { winner: p1, reason: "Bankruptcy" };
+
+      console.log(`[${room.id}] Round Resolved. Winner: ${result.winner}`);
+
+      io.to(room.id).emit("round_result", {
+          result,
+          updatedDeck: room.globalDeck,
+          updatedBios: { [p1]: room.playerStates[p1].bios, [p2]: room.playerStates[p2].bios },
+          opponentTargets: { 
+            [p1]: room.playerStates[p1].numberHand.find(n => n.id === data1.targetId)?.value || 0, 
+            [p2]: room.playerStates[p2].numberHand.find(n => n.id === data2.targetId)?.value || 0 
+          },
+          gameOver
+      });
+
+  } catch (error) {
+      console.error(`[${room.id}] CRITICAL ERROR in resolveGame:`, error);
+      // Emergency Reset if things blow up
+      io.to(room.id).emit("error", "Server Error - Round Voided");
+      startNewRound(room);
   }
-
-  // Send Results
-  io.to(room.id).emit("round_result", {
-      result,
-      updatedDeck: room.globalDeck,
-      updatedBios: { [p1]: room.playerStates[p1].bios, [p2]: room.playerStates[p2].bios },
-      // Also send targets so we can reveal the hidden number card
-      opponentTargets: { [p1]: room.playerStates[p1].numberHand.find(n => n.id === data1.targetId)?.value, [p2]: room.playerStates[p2].numberHand.find(n => n.id === data2.targetId)?.value }
-  });
 };
 
 const forceShowdown = (room: Room) => {
    resolveGame(room);
 };
 
-// ... (Socket Handlers) ...
+// ... SOCKETS ...
 io.on("connection", (socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
 
@@ -174,7 +222,13 @@ io.on("connection", (socket: Socket) => {
      room.turnData[socket.id].cardIds = cardIds;
      room.playerStates[socket.id].isSubmitted = true;
      socket.to(room.id).emit("opponent_action", { type: "HAND_SUBMITTED" });
-     if (room.players.every(pid => room.playerStates[pid].isSubmitted)) resolveGame(room);
+     
+     // Log the submit
+     console.log(`[${room.id}] Player ${socket.id} submitted hand.`);
+     
+     if (room.players.every(pid => room.playerStates[pid].isSubmitted)) {
+         resolveGame(room);
+     }
   });
 
   socket.on("next_round_request", () => {
