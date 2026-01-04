@@ -4,9 +4,12 @@ import { socket } from "../network/socketBridge";
 import { LocalStep } from "./localSteps";
 import type { GamePhase, PlayingCard, NumberCard } from "../../../shared/types";
 
+export type Overlay = "NONE" | "VIEW_TABLE";
+
 export interface GameState {
   phase: GamePhase;
   localStep: LocalStep;
+  overlay: Overlay;
 
   roomId: string | null;
   timer: number;
@@ -23,14 +26,22 @@ export interface GameState {
 
   roundResult: any;
   gameOver: any;
+
+  targetValue: number;
+  currentSum: number;
 }
 
 export const useGameState = () => {
   const [phase, setPhase] = useState<GamePhase>("LOBBY");
   const [localStep, setLocalStep] = useState<LocalStep>(LocalStep.PICK_TARGET);
 
+  const [overlay, setOverlay] = useState<Overlay>("NONE");
+
   const [roomId, setRoomId] = useState<string | null>(null);
-  const [timer, setTimer] = useState(0);
+
+  // --- TIMER SPLIT ---
+  const [serverTimer, setServerTimer] = useState(0);
+  const [displayTimer, setDisplayTimer] = useState(0);
 
   const [globalDeck, setGlobalDeck] = useState<PlayingCard[]>([]);
   const [myNumberHand, setMyNumberHand] = useState<NumberCard[]>([]);
@@ -67,7 +78,8 @@ export const useGameState = () => {
       setOpponentBios(data.opponentBios);
       setPot(data.pot);
 
-      setTimer(data.timeRemaining);
+      setServerTimer(data.timeRemaining);
+      setDisplayTimer(data.timeRemaining);
 
       setSelectedTargetId(null);
       setSelectedCardIds([]);
@@ -76,7 +88,8 @@ export const useGameState = () => {
     });
 
     socket.on("timer_sync", time => {
-      setTimer(time);
+      setServerTimer(time);
+      setDisplayTimer(time);
     });
 
     socket.on("economy_update", data => {
@@ -102,6 +115,7 @@ export const useGameState = () => {
 
       if (socket.id && data.updatedBios?.[socket.id] !== undefined) {
         setBios(data.updatedBios[socket.id]);
+
         const opId = Object.keys(data.updatedBios).find(
           id => id !== socket.id
         );
@@ -120,6 +134,20 @@ export const useGameState = () => {
   }, []);
 
   /* -------------------------------------------------- */
+  /* ---------------- LOCAL TIMER --------------------- */
+  /* -------------------------------------------------- */
+
+  useEffect(() => {
+    if (phase !== "GAME_LOOP") return;
+
+    const interval = setInterval(() => {
+      setDisplayTimer(t => Math.max(0, t - 1));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  /* -------------------------------------------------- */
   /* ---------------- DERIVED DATA -------------------- */
   /* -------------------------------------------------- */
 
@@ -136,12 +164,26 @@ export const useGameState = () => {
     }, 0);
   }, [selectedCardIds, globalDeck]);
 
+  /* -------------------------------------------------- */
+  /* ---------------- OVERLAY CONTROL ----------------- */
+  /* -------------------------------------------------- */
+
+  const openTableView = () => {
+    setOverlay("VIEW_TABLE");
+  };
+
+  const closeTableView = () => {
+    setOverlay("NONE");
+  };
+
   return {
     state: {
       phase,
       localStep,
+      overlay,
+
       roomId,
-      timer,
+      timer: displayTimer,
 
       globalDeck,
       myNumberHand,
@@ -163,6 +205,9 @@ export const useGameState = () => {
     // setters intentionally exposed for UI flow only
     setLocalStep,
     setSelectedTargetId,
-    setSelectedCardIds
+    setSelectedCardIds,
+
+    openTableView,
+    closeTableView
   };
 };

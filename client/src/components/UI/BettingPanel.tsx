@@ -12,10 +12,14 @@ export const BettingPanel: React.FC<Props> = ({ currentBios, onPlaceBet, onToggl
 
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'none' // Allow clicks to pass through outside the box? No, we want modal.
-    }}>
+    position: 'fixed',
+    bottom: 40,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 20,
+    pointerEvents: 'auto'
+  }}>
+
       {/* THE BOX */}
       <div style={{
         pointerEvents: 'auto',

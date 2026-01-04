@@ -1,51 +1,59 @@
-import { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import { useRef, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+
+type Bubble = {
+  position: [number, number, number];
+  radius: number;
+};
 
 export const Atmosphere = () => {
-  const bubblesRef = useRef<THREE.Group>(null);
+  const groupRef = useRef<THREE.Group>(null);
 
-  // Animate bubbles floating slowly upward
-  useFrame((state) => {
-    if (bubblesRef.current) {
-      bubblesRef.current.position.y = (state.clock.getElapsedTime() * 0.2) % 10;
-      bubblesRef.current.rotation.y += 0.001;
+  // 🔒 Generate bubbles ONCE
+  const bubbles = useMemo<Bubble[]>(() => {
+    return Array.from({ length: 50 }).map(() => ({
+      position: [
+        (Math.random() - 0.5) * 20,
+        Math.random() * 15,
+        (Math.random() - 0.5) * 10
+      ],
+      radius: 0.05 + Math.random() * 0.1
+    }));
+  }, []);
+
+  // 🎞️ Animate smoothly forever
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+
+    groupRef.current.position.y += delta * 0.2;
+    groupRef.current.rotation.y += delta * 0.1;
+
+    if (groupRef.current.position.y > 5) {
+      groupRef.current.position.y = -5;
     }
   });
 
   return (
     <>
-      {/* 1. The Deep Dark Background Color */}
-      <color attach="background" args={['#050505']} />
-      
-      {/* 2. Volumetric Fog to hide the infinite edge */}
-      <fog attach="fog" args={['#050505', 5, 25]} />
+      <color attach="background" args={["#050505"]} />
+      <fog attach="fog" args={["#050505", 5, 25]} />
 
-      {/* 3. Ambient Lighting (Very dim) */}
       <ambientLight intensity={0.2} color="#4a4a4a" />
 
-      {/* 4. The "Interrogation" Spot Light - focused on the table */}
       <spotLight
         position={[0, 10, 0]}
         angle={0.4}
         penumbra={0.5}
         intensity={2}
         castShadow
-        color="#fff0d6" // Slight yellow tint like an old bulb
+        color="#fff0d6"
       />
 
-      {/* 5. Floating "Air" Particles (Procedural Bubbles) */}
-      <group ref={bubblesRef} position={[0, -5, 0]}>
-        {Array.from({ length: 50 }).map((_, i) => (
-          <mesh
-            key={i}
-            position={[
-              (Math.random() - 0.5) * 20,
-              Math.random() * 15,
-              (Math.random() - 0.5) * 10
-            ]}
-          >
-            <sphereGeometry args={[0.05 + Math.random() * 0.1, 16, 16]} />
+      <group ref={groupRef} position={[0, -5, 0]}>
+        {bubbles.map((b, i) => (
+          <mesh key={i} position={b.position}>
+            <sphereGeometry args={[b.radius, 16, 16]} />
             <meshStandardMaterial
               color="#88ccff"
               transparent

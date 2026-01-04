@@ -15,9 +15,12 @@ interface GridProps {
 export const SelectionGrid: React.FC<GridProps> = ({ deck, selectedIds, onToggle, onConfirm, onClose, currentSum, targetValue }) => {
   return (
     <div style={{
-      position: 'absolute', inset: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'none'
+      position: 'fixed',
+      bottom: 20,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 20,
+      pointerEvents: 'auto'
     }}>
       
       {/* THE PANEL CONTAINER */}

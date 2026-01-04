@@ -1,5 +1,7 @@
-import { Suspense, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+// client/src/components/Scene/GameScene.tsx
+import { Suspense, useEffect } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+
 import {
   OrbitControls,
   PerspectiveCamera,
@@ -16,10 +18,31 @@ import { Card3D } from "../Game/Card3D";
 import { NumberCard3D } from "../Game/NumberCard3D";
 import { TargetSlot } from "../Game/TargetSlot";
 
-import type { GameState } from "../../game/useGameState";
+import type { SuitSymbol } from "../../../../shared/types";
+
+interface NumberCard {
+  id: string;
+  value: number;
+  isUsed: boolean;
+}
+
+interface PlayingCard {
+  id: string;
+  rank: string;
+  suit: SuitSymbol;
+  value: number;
+}
 
 interface GameSceneProps {
-  state: GameState;
+  phase: string;
+  myNumberHand: NumberCard[];
+  selectedTargetId: string | null;
+  selectedCardIds: string[];
+  globalDeck: PlayingCard[];
+  targetValue: number;
+  opponentTargetValue: number;
+  bios: number;
+  opponentBios: number;
   onTargetClick: (id: string) => void;
 }
 
@@ -29,29 +52,37 @@ const Loader = () => (
   </Html>
 );
 
-export const GameScene = ({ state, onTargetClick }: GameSceneProps) => {
-  if (!state) return null;
+export const GameScene = ({
+  phase,
+  myNumberHand,
+  selectedTargetId,
+  selectedCardIds,
+  globalDeck,
+  targetValue,
+  opponentTargetValue,
+  bios,
+  opponentBios,
+  onTargetClick,
+}: GameSceneProps) => {
 
-  const {
-    myNumberHand = [],
-    selectedTargetId,
-    selectedCardIds = [],
-    globalDeck = [],
-    bios = 0,
-    opponentBios = 0,
-    roundResult,
-  } = state;
+  // ------------------- INIT SCENE -------------------
+  useEffect(() => {
+    console.log("Scene initialized");
+    return () => {
+      console.log("Scene disposed");
+    };
+  }, []);
 
-  const opponentTargetValue = useMemo<number>(() => {
-  if (!roundResult?.opponentTargets) return 0;
-
-  const values = Object.values(roundResult.opponentTargets) as number[];
-  return values[0] ?? 0;
-  }, [roundResult]);
-
+  // ------------------- DATA-UPDATES -------------------
+  useEffect(() => {
+    // Only update visuals when data changes
+    // For example: update number cards, deck positions
+    console.log("Deck/hand updated", { globalDeck, myNumberHand });
+  }, [globalDeck, myNumberHand, selectedCardIds, selectedTargetId, opponentTargetValue]);
 
   return (
     <Canvas shadows style={{ position: "absolute", inset: 0 }}>
+      {/* ---------------- CAMERA & LIGHT ---------------- */}
       <PerspectiveCamera makeDefault position={[0, 18, 12]} fov={35} />
       <ambientLight intensity={0.4} />
 
@@ -59,18 +90,18 @@ export const GameScene = ({ state, onTargetClick }: GameSceneProps) => {
         <Environment preset="city" blur={1} />
         <Atmosphere />
         <Table3D />
-
-        <EffectComposer enableNormalPass>
+        {/*enableNormalPass */}
+        <EffectComposer> 
           <Bloom luminanceThreshold={1} intensity={1.5} radius={0.5} />
           <Vignette darkness={1.0} />
           <Noise opacity={0.05} />
         </EffectComposer>
 
-        {/* --- TABLE SLOTS --- */}
+        {/* ---------------- TABLE SLOTS ---------------- */}
         <TargetSlot position={[0, 0.55, 2]} label="YOUR TARGET" />
         <TargetSlot position={[0, 0.55, -2]} label="OPPONENT" />
 
-        {/* --- YOUR NUMBER CARDS --- */}
+        {/* ---------------- PLAYER NUMBER CARDS ---------------- */}
         {myNumberHand.map((card, i) => {
           const isSelected = card.id === selectedTargetId;
           const position: [number, number, number] = isSelected
@@ -89,31 +120,32 @@ export const GameScene = ({ state, onTargetClick }: GameSceneProps) => {
           );
         })}
 
-        {/* --- OPPONENT TARGET CARD --- */}
-        {roundResult && opponentTargetValue > 0 && (
+        {/* ---------------- OPPONENT TARGET ---------------- */}
+        {opponentTargetValue > 0 && (
           <NumberCard3D
+            key="opponent-target"
             value={opponentTargetValue}
             position={[0, 0.65, -2]}
             isUsed
           />
         )}
 
-        {/* --- PLAYING CARDS --- */}
+        {/* ---------------- PLAYING CARDS ---------------- */}
         {selectedCardIds.map((id, i) => {
-          const card = globalDeck.find((c) => c.id === id);
+          const card = globalDeck.find(c => c.id === id);
           if (!card) return null;
 
           return (
             <Card3D
-              key={id}
+              key={card.id}
               position={[(i - 2) * 1.5, 0.6, 0]}
               rank={card.rank}
-              suit={card.suit}
+              suit={card.suit} // ✅ Already SuitSymbol
             />
           );
         })}
 
-        {/* --- CHIPS --- */}
+        {/* ---------------- CHIPS ---------------- */}
         <BioChipsStack count={bios} position={[-6, 0.55, 3]} />
         <BioChipsStack count={opponentBios} position={[6, 0.55, -3]} />
       </Suspense>

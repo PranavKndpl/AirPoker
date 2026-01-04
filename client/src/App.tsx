@@ -14,11 +14,16 @@ export default function App() {
     state,
     setLocalStep,
     setSelectedTargetId,
-    setSelectedCardIds
+    setSelectedCardIds,
+    openTableView,
+    closeTableView
   } = useGameState();
 
   const actions = useGameActions({
     localStep: state.localStep,
+    overlay: state.overlay,
+    openTableView,
+    closeTableView,
     setLocalStep,
     selectedTargetId: state.selectedTargetId,
     setSelectedTargetId,
@@ -26,15 +31,100 @@ export default function App() {
     setSelectedCardIds
   });
 
+  // Compute opponent target value
+  const opponentTargetValue =
+    state.roundResult?.opponentTargets
+      ? Object.values(state.roundResult.opponentTargets)[0] ?? 0
+      : 0;
+
   return (
-    <div style={{ width: "100vw", height: "100vh", background: "#000" }}>
-      {/* 3D Scene */}
+    <div style={rootStyle}>
+      {/* ================= UI OVERLAY LAYER ================= */}
+      <div style={overlayRootStyle}>
+        {/* LOBBY */}
+        {state.phase === "LOBBY" && !state.roomId && (
+          <Overlay>
+            <button onClick={actions.createRoom} style={btnStyle}>
+              CREATE ROOM
+            </button>
+            <button
+              onClick={() => {
+                const id = prompt("Room ID");
+                if (id) actions.joinRoom(id);
+              }}
+              style={{ ...btnStyle, marginLeft: 20 }}
+            >
+              JOIN ROOM
+            </button>
+          </Overlay>
+        )}
+
+        {/* VIEW TABLE */}
+        {state.overlay === "VIEW_TABLE" && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 30,
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              zIndex: 100,
+              pointerEvents: "none"
+            }}
+          >
+            <button
+              onClick={actions.toggleViewTable}
+              style={{
+                ...btnStyle,
+                pointerEvents: "auto"
+              }}
+            >
+              RETURN TO GAME
+            </button>
+          </div>
+        )}
+
+        {/* WAITING */}
+        {state.localStep === LocalStep.WAITING && (
+          <Overlay>
+            <h2 style={{ color: "#ffd700" }}>
+              Waiting for opponent...
+            </h2>
+          </Overlay>
+        )}
+
+        {/* RESOLUTION */}
+        {state.phase === "RESOLUTION" && (
+          <Overlay>
+            <button onClick={actions.requestNextRound} style={btnStyle}>
+              NEXT ROUND
+            </button>
+          </Overlay>
+        )}
+
+        {/* GAME OVER */}
+        {state.phase === "GAME_OVER" && (
+          <Overlay>
+            <h1 style={{ color: "#ffd700" }}>GAME OVER</h1>
+          </Overlay>
+        )}
+      </div>
+
+      {/* ================= 3D SCENE ================= */}
       <GameScene
-        state={state}
+        phase={state.phase}
+        myNumberHand={state.myNumberHand}
+        selectedTargetId={state.selectedTargetId}
+        selectedCardIds={state.selectedCardIds}
+        globalDeck={state.globalDeck}
+        targetValue={state.targetValue}
+        opponentTargetValue={0}
+        bios={state.bios}
+        opponentBios={state.opponentBios}
         onTargetClick={(id) => actions.lockTarget(id)}
       />
 
-      {/* HUD (single source of truth) */}
+      {/* ================= HUD ================= */}
       <GameHUD
         roomId={state.roomId}
         timer={state.timer}
@@ -44,27 +134,10 @@ export default function App() {
         phase={state.phase}
       />
 
-      {/* LOBBY */}
-      {state.phase === "LOBBY" && !state.roomId && (
-        <div style={overlayStyle}>
-          <button onClick={actions.createRoom} style={btnStyle}>
-            CREATE ROOM
-          </button>
-          <button
-            onClick={() => {
-              const id = prompt("Room ID");
-              if (id) actions.joinRoom(id);
-            }}
-            style={{ ...btnStyle, marginLeft: 20 }}
-          >
-            JOIN ROOM
-          </button>
-        </div>
-      )}
-
-      {/* BETTING */}
+      {/* ================= IN-GAME PANELS ================= */}
       {state.phase === "GAME_LOOP" &&
-        state.localStep === LocalStep.BETTING && (
+        state.localStep === LocalStep.BETTING &&
+        state.overlay === "NONE" && (
           <BettingPanel
             currentBios={state.bios}
             onPlaceBet={actions.placeBet}
@@ -72,9 +145,9 @@ export default function App() {
           />
         )}
 
-      {/* CARD SELECTION */}
       {state.phase === "GAME_LOOP" &&
-        state.localStep === LocalStep.PICK_HAND && (
+        state.localStep === LocalStep.PICK_HAND &&
+        state.overlay === "NONE" && (
           <SelectionGrid
             deck={state.globalDeck}
             selectedIds={state.selectedCardIds}
@@ -85,43 +158,38 @@ export default function App() {
             targetValue={state.targetValue}
           />
         )}
-
-      {/* WAITING */}
-      {state.localStep === LocalStep.WAITING && (
-        <div style={overlayStyle}>
-          <h2 style={{ color: "#ffd700" }}>
-            Waiting for opponent...
-          </h2>
-        </div>
-      )}
-
-      {/* RESOLUTION */}
-      {state.phase === "RESOLUTION" && (
-        <div style={overlayStyle}>
-          <button onClick={actions.requestNextRound} style={btnStyle}>
-            NEXT ROUND
-          </button>
-        </div>
-      )}
-
-      {/* GAME OVER */}
-      {state.phase === "GAME_OVER" && (
-        <div style={overlayStyle}>
-          <h1 style={{ color: "#ffd700" }}>GAME OVER</h1>
-        </div>
-      )}
     </div>
   );
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: "absolute",
+/* ================= REUSABLE OVERLAY ================= */
+function Overlay({ children }: { children: React.ReactNode }) {
+  return <div style={overlayStyle}>{children}</div>;
+}
+
+/* ================= STYLES ================= */
+const rootStyle: React.CSSProperties = {
+  width: "100vw",
+  height: "100vh",
+  background: "#000",
+  overflow: "hidden"
+};
+
+const overlayRootStyle: React.CSSProperties = {
+  position: "fixed",
   inset: 0,
+  zIndex: 9999,
+  pointerEvents: "none"
+};
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.85)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "rgba(0,0,0,0.85)",
-  zIndex: 10
+  pointerEvents: "auto"
 };
 
 const btnStyle: React.CSSProperties = {

@@ -4,6 +4,11 @@ import { LocalStep, canTransition } from "./localSteps";
 
 interface Params {
   localStep: LocalStep;
+
+  overlay: "NONE" | "VIEW_TABLE";
+  openTableView: () => void;
+  closeTableView: () => void;
+
   setLocalStep: (step: LocalStep) => void;
 
   selectedTargetId: string | null;
@@ -15,6 +20,9 @@ interface Params {
 
 export const useGameActions = ({
   localStep,
+  overlay,
+  openTableView,
+  closeTableView,
   setLocalStep,
   selectedTargetId,
   setSelectedTargetId,
@@ -83,16 +91,10 @@ export const useGameActions = ({
   /* -------------------------------------------------- */
 
   const toggleViewTable = () => {
-    if (localStep === LocalStep.VIEW_TABLE) {
-      setLocalStep(LocalStep.BETTING);
-      return;
-    }
-
-    if (
-      localStep === LocalStep.BETTING ||
-      localStep === LocalStep.PICK_HAND
-    ) {
-      setLocalStep(LocalStep.VIEW_TABLE);
+    if (overlay === "VIEW_TABLE") {
+      closeTableView();
+    } else {
+      openTableView();
     }
   };
 
