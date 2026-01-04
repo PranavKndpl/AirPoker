@@ -3,20 +3,34 @@ import { PlayingCard, NumberCard } from "../../../shared/types";
 import { Hand } from "pokersolver";
 import { resolveCards } from "./deck";
 
+/* ------------------------------------------------------------------ */
+/* --------------------------- TYPES -------------------------------- */
+/* ------------------------------------------------------------------ */
+
 export interface PlayerSubmission {
   targetId?: string;
   cardIds?: string[];
 }
 
-export interface ResolutionResult {
-  winner: string | null;
-  type: "WIN" | "DRAW" | "INVALID";
-  reason: string;
+export interface ResolvedHand {
+  name: string;       // e.g. "Straight Flush"
+  strength: number;   // pokersolver rank (lower = stronger)
 }
+
+export interface ResolutionResult {
+  outcome: "WIN" | "LOSE" | "DRAW";
+  hands: {
+    [playerId: string]: ResolvedHand;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* ----------------------- MAIN RESOLUTION --------------------------- */
+/* ------------------------------------------------------------------ */
 
 /**
  * Resolve a round between two players.
- * This function is PURE: no mutation, no sockets.
+ * PURE FUNCTION — no mutation, no sockets, no side effects.
  */
 export const resolveRound = (
   playerIds: [string, string],
@@ -29,41 +43,78 @@ export const resolveRound = (
   const r1 = evaluatePlayer(p1, submissions[p1], numberHands[p1], deck);
   const r2 = evaluatePlayer(p2, submissions[p2], numberHands[p2], deck);
 
-  // --- Invalid / Timeout Resolution ---
+  /* ---------------- INVALID / TIMEOUT CASES ---------------- */
+
+  // both failed
   if (!r1.valid && !r2.valid) {
-    return { winner: null, type: "DRAW", reason: "Both players failed" };
-  }
-
-  if (!r1.valid) {
-    return { winner: p2, type: "WIN", reason: "Opponent failed target or hand" };
-  }
-
-  if (!r2.valid) {
-    return { winner: p1, type: "WIN", reason: "Opponent failed target or hand" };
-  }
-
-  // --- Both Valid: Compare Poker Hands ---
-  const h1 = Hand.solve(r1.cards.map(toSolverFormat));
-  const h2 = Hand.solve(r2.cards.map(toSolverFormat));
-  const winners = Hand.winners([h1, h2]);
-
-  if (winners.length === 1) {
     return {
-      winner: winners[0] === h1 ? p1 : p2,
-      type: "WIN",
-      reason: winners[0].descr
+      outcome: "DRAW",
+      hands: {}
     };
   }
 
-  return { winner: null, type: "DRAW", reason: h1.descr };
+  // p1 failed
+  if (!r1.valid) {
+    const h2 = Hand.solve(r2.cards.map(toSolverFormat));
+    return {
+      outcome: "LOSE",
+      hands: {
+        [p2]: {
+          name: h2.descr,
+          strength: h2.rank
+        }
+      }
+    };
+  }
+
+  // p2 failed
+  if (!r2.valid) {
+    const h1 = Hand.solve(r1.cards.map(toSolverFormat));
+    return {
+      outcome: "WIN",
+      hands: {
+        [p1]: {
+          name: h1.descr,
+          strength: h1.rank
+        }
+      }
+    };
+  }
+
+  /* ---------------- BOTH VALID: POKER COMPARISON ---------------- */
+
+  const h1 = Hand.solve(r1.cards.map(toSolverFormat));
+  const h2 = Hand.solve(r2.cards.map(toSolverFormat));
+
+  const winners = Hand.winners([h1, h2]);
+
+  let outcome: "WIN" | "LOSE" | "DRAW" = "DRAW";
+
+  if (winners.length === 1) {
+    outcome = winners[0] === h1 ? "WIN" : "LOSE";
+  }
+
+  return {
+    outcome,
+    hands: {
+      [p1]: {
+        name: h1.descr,
+        strength: h1.rank
+      },
+      [p2]: {
+        name: h2.descr,
+        strength: h2.rank
+      }
+    }
+  };
 };
 
 /* ------------------------------------------------------------------ */
-/* ------------------------ HELPERS --------------------------------- */
+/* -------------------------- HELPERS -------------------------------- */
 /* ------------------------------------------------------------------ */
 
 const evaluatePlayer = (
-  playerId: string,
+  _playerId: string,
   submission: PlayerSubmission | undefined,
   numberHand: NumberCard[],
   deck: PlayingCard[]
@@ -72,9 +123,11 @@ const evaluatePlayer = (
     return { valid: false, cards: [] };
   }
 
-  const targetValue = numberHand.find(n => n.id === submission.targetId)?.value;
+  const targetValue = numberHand.find(
+    n => n.id === submission.targetId
+  )?.value;
+
   if (targetValue === undefined) {
-    // Should not happen by design, but server stays strict
     return { valid: false, cards: [] };
   }
 
@@ -91,11 +144,12 @@ const evaluatePlayer = (
   return { valid: true, cards };
 };
 
-const toSolverFormat = (card: PlayingCard) => {
-  const r = card.rank === "10" ? "T" : card.rank;
-  const s =
+const toSolverFormat = (card: PlayingCard): string => {
+  const rank = card.rank === "10" ? "T" : card.rank;
+  const suit =
     card.suit === "♠" ? "s" :
     card.suit === "♥" ? "h" :
     card.suit === "♣" ? "c" : "d";
-  return r + s;
+
+  return rank + suit;
 };

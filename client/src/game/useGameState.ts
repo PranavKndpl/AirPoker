@@ -59,7 +59,6 @@ export const useGameState = () => {
   /* -------------------------------------------------- */
   /* ---------------- SOCKET EVENTS ------------------- */
   /* -------------------------------------------------- */
-
   useEffect(() => {
     socket.on("room_created", ({ roomId }) => {
       setRoomId(roomId);
@@ -95,36 +94,53 @@ export const useGameState = () => {
     socket.on("economy_update", data => {
       setPot(data.pot);
 
-      if (socket.id && data.bios?.[socket.id] !== undefined) {
-        setBios(data.bios[socket.id]);
-      } else {
-        const opId = Object.keys(data.bios || {}).find(
-          id => id !== socket.id
-        );
-        if (opId) setOpponentBios(data.bios[opId]);
+      const biosData = data.bios || {};
+      if (socket.id && biosData[socket.id] !== undefined) {
+        setBios(biosData[socket.id]);
+
+        const opId = Object.keys(biosData).find(id => id !== socket.id);
+        if (opId) setOpponentBios(biosData[opId]);
       }
     });
 
     socket.on("round_result", data => {
-      console.log("[CLIENT] Round resolved");
+      console.log("[CLIENT] RAW round_result:", data.result);
+
+      const result = data.result || {};
+      const myId = socket.id!;
+      const [p1, p2] = Object.keys(result.hands);
+      const opponentId = myId === p1 ? p2 : p1;
+
+      // 🔑 Normalize outcome relative to ME
+      const myOutcome: "WIN" | "LOSE" | "DRAW" =
+        result.outcome === "DRAW"
+          ? "DRAW"
+          : (result.outcome === "WIN" && myId === p1) ||
+            (result.outcome === "LOSE" && myId === p2)
+          ? "WIN"
+          : "LOSE";
+
+      setRoundResult({
+        outcome: myOutcome,
+        playerHand: result.hands[myId],
+        opponentHand: result.hands[opponentId],
+        opponentTargets: result.targets ?? null
+      });
 
       setPhase("RESOLUTION");
-      setRoundResult(data.result);
 
-      setGlobalDeck(data.updatedDeck);
+      if (Array.isArray(data.updatedDeck)) {
+        setGlobalDeck(data.updatedDeck);
+      }
 
-      if (socket.id && data.updatedBios?.[socket.id] !== undefined) {
-        setBios(data.updatedBios[socket.id]);
-
-        const opId = Object.keys(data.updatedBios).find(
-          id => id !== socket.id
-        );
-        if (opId) setOpponentBios(data.updatedBios[opId]);
+      const biosData = data.updatedBios || {};
+      if (socket.id && biosData[socket.id] !== undefined) {
+        setBios(biosData[socket.id]);
+        setOpponentBios(biosData[opponentId]);
       }
 
       if (data.gameOver) {
         setGameOver(data.gameOver);
-        setPhase("GAME_OVER");
       }
     });
 
@@ -136,7 +152,6 @@ export const useGameState = () => {
   /* -------------------------------------------------- */
   /* ---------------- LOCAL TIMER --------------------- */
   /* -------------------------------------------------- */
-
   useEffect(() => {
     if (phase !== "GAME_LOOP") return;
 
@@ -150,11 +165,8 @@ export const useGameState = () => {
   /* -------------------------------------------------- */
   /* ---------------- DERIVED DATA -------------------- */
   /* -------------------------------------------------- */
-
   const targetValue = useMemo(() => {
-    return (
-      myNumberHand.find(n => n.id === selectedTargetId)?.value || 0
-    );
+    return myNumberHand.find(n => n.id === selectedTargetId)?.value || 0;
   }, [myNumberHand, selectedTargetId]);
 
   const currentSum = useMemo(() => {
@@ -167,14 +179,8 @@ export const useGameState = () => {
   /* -------------------------------------------------- */
   /* ---------------- OVERLAY CONTROL ----------------- */
   /* -------------------------------------------------- */
-
-  const openTableView = () => {
-    setOverlay("VIEW_TABLE");
-  };
-
-  const closeTableView = () => {
-    setOverlay("NONE");
-  };
+  const openTableView = () => setOverlay("VIEW_TABLE");
+  const closeTableView = () => setOverlay("NONE");
 
   return {
     state: {
@@ -202,7 +208,6 @@ export const useGameState = () => {
       currentSum
     },
 
-    // setters intentionally exposed for UI flow only
     setLocalStep,
     setSelectedTargetId,
     setSelectedCardIds,

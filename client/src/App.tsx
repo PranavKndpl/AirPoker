@@ -8,6 +8,7 @@ import { GameScene } from "./components/Scene/GameScene";
 import { BettingPanel } from "./components/UI/BettingPanel";
 import { SelectionGrid } from "./components/UI/SelectionGrid";
 import { GameHUD } from "./components/UI/GameHUD";
+import { ResultScreen } from "./components/UI/ResultScreen";
 
 export default function App() {
   const {
@@ -60,7 +61,8 @@ export default function App() {
         )}
 
         {/* VIEW TABLE */}
-        {state.overlay === "VIEW_TABLE" && (
+        {state.overlay === "VIEW_TABLE" &&
+          state.phase === "GAME_LOOP" && (
           <div
             style={{
               position: "fixed",
@@ -93,15 +95,6 @@ export default function App() {
           </Overlay>
         )}
 
-        {/* RESOLUTION */}
-        {state.phase === "RESOLUTION" && (
-          <Overlay>
-            <button onClick={actions.requestNextRound} style={btnStyle}>
-              NEXT ROUND
-            </button>
-          </Overlay>
-        )}
-
         {/* GAME OVER */}
         {state.phase === "GAME_OVER" && (
           <Overlay>
@@ -109,6 +102,14 @@ export default function App() {
           </Overlay>
         )}
       </div>
+
+      {/* ================= RESULT SCREEN ================= */}
+      {state.roundResult && state.phase === "RESOLUTION" && (
+        <ResultScreen
+          result={state.roundResult}
+          onNextRound={actions.requestNextRound}
+        />
+      )}
 
       {/* ================= 3D SCENE ================= */}
       <GameScene

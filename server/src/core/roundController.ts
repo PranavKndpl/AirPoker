@@ -1,15 +1,14 @@
 // server/src/core/roundController.ts
 import { Room } from "../state/roomStore";
-import { createDeck } from "./deck";
+import { createDeck, burnCards } from "./deck";
 import { resolveRound } from "./rules";
-import { burnCards } from "./deck";
 import { Server } from "socket.io";
 
 const ROUND_TIME_SEC = 60;
 
-/**
- * Start a new round.
- */
+/* ------------------------------------------------------------------ */
+/* ---------------------------- START ROUND ------------------------- */
+/* ------------------------------------------------------------------ */
 export const startRound = (room: Room, io: Server) => {
   console.log(`[ROUND START] Room ${room.id}`);
 
@@ -47,7 +46,7 @@ export const startRound = (room: Room, io: Server) => {
     }
   });
 
-  // Notify players
+  // Notify players individually
   room.players.forEach(pid => {
     const opponentId = room.players.find(p => p !== pid)!;
     io.to(pid).emit("new_round_start", {
@@ -66,7 +65,6 @@ export const startRound = (room: Room, io: Server) => {
 /* ------------------------------------------------------------------ */
 /* ---------------------------- TIMER -------------------------------- */
 /* ------------------------------------------------------------------ */
-
 const startTimer = (room: Room, io: Server) => {
   let timeLeft = ROUND_TIME_SEC;
   console.log(`[TIMER] Room ${room.id} started (${ROUND_TIME_SEC}s)`);
@@ -91,22 +89,27 @@ const startTimer = (room: Room, io: Server) => {
 /* ------------------------------------------------------------------ */
 /* -------------------------- RESOLUTION ----------------------------- */
 /* ------------------------------------------------------------------ */
-
 export const endRound = (
   room: Room,
   io: Server,
   reason: "NORMAL" | "TIMEOUT"
 ) => {
-  if (room.phase !== "GAME_LOOP") {
-    console.error(
-      `[INVALID END] Attempted to resolve room ${room.id} outside GAME_LOOP`
-    );
+  if (room.players.length < 2) {
+    console.warn(`[ABORT END] Room ${room.id} has insufficient players`);
+    if (room.timer) {
+      clearInterval(room.timer);
+      room.timer = undefined;
+    }
+    room.phase = "LOBBY";
     return;
   }
 
-  console.log(
-    `[ROUND END] Room ${room.id} resolving (${reason})`
-  );
+  if (room.phase !== "GAME_LOOP") {
+    console.error(`[INVALID END] Attempted to resolve room ${room.id} outside GAME_LOOP`);
+    return;
+  }
+
+  console.log(`[ROUND END] Room ${room.id} resolving (${reason})`);
 
   if (room.timer) {
     clearInterval(room.timer);
@@ -115,8 +118,15 @@ export const endRound = (
 
   room.phase = "RESOLUTION";
 
-  const [p1, p2] = room.players;
+  const activePlayers = room.players.filter(pid => room.playerStates[pid]);
+  if (activePlayers.length < 2) {
+    console.warn(`[INVALID RESOLUTION] Room ${room.id} missing player state`);
+    return;
+  }
 
+  const [p1, p2] = activePlayers;
+
+  // Resolve the round using number hands & turn data
   const result = resolveRound(
     [p1, p2],
     room.turnData,
@@ -127,32 +137,30 @@ export const endRound = (
     room.globalDeck
   );
 
-  console.log(
-    `[RESOLUTION] Room ${room.id}:`,
-    JSON.stringify(result)
-  );
+  console.log(`[RESOLUTION] Room ${room.id}:`, JSON.stringify(result));
+
+  // Derive winner locally from outcome
+  const winner =
+    result.outcome === "WIN" ? p1 :
+    result.outcome === "LOSE" ? p2 :
+    null;
 
   // Apply pot
-  if (result.winner) {
-    room.playerStates[result.winner].bios += room.pot;
-    console.log(
-      `[PAYOUT] Player ${result.winner} wins ${room.pot} bios`
-    );
+  if (winner) {
+    room.playerStates[winner].bios += room.pot;
+    console.log(`[PAYOUT] Player ${winner} wins ${room.pot} bios`);
   } else {
     console.log(`[DRAW] Pot discarded`);
   }
 
-  // Burn cards (even invalid hands burn what was submitted)
+  // Burn all submitted cards
   const allCardIds = [
     ...(room.turnData[p1]?.cardIds || []),
     ...(room.turnData[p2]?.cardIds || [])
   ];
-
   if (allCardIds.length > 0) {
     burnCards(room.globalDeck, allCardIds);
-    console.log(
-      `[BURN] Room ${room.id} burned ${allCardIds.length} cards`
-    );
+    console.log(`[BURN] Room ${room.id} burned ${allCardIds.length} cards`);
   }
 
   // Bankruptcy check
@@ -162,30 +170,25 @@ export const endRound = (
   } else if (room.playerStates[p2].bios <= 0) {
     gameOver = { winner: p1, reason: "Bankruptcy" };
   }
-
   if (gameOver) {
-    console.warn(
-      `[GAME OVER] Room ${room.id}:`,
-      JSON.stringify(gameOver)
-    );
+    console.warn(`[GAME OVER] Room ${room.id}:`, JSON.stringify(gameOver));
   }
 
+  // Emit round result to all players
   io.to(room.id).emit("round_result", {
-    result,
+    result, // contains outcome & hands
     updatedDeck: room.globalDeck,
     updatedBios: {
       [p1]: room.playerStates[p1].bios,
       [p2]: room.playerStates[p2].bios
     },
     opponentTargets: {
-      [p1]:
-        room.playerStates[p1].numberHand.find(
-          n => n.id === room.turnData[p1]?.targetId
-        )?.value || 0,
-      [p2]:
-        room.playerStates[p2].numberHand.find(
-          n => n.id === room.turnData[p2]?.targetId
-        )?.value || 0
+      [p1]: room.playerStates[p1].numberHand.find(
+        n => n.id === room.turnData[p1]?.targetId
+      )?.value || 0,
+      [p2]: room.playerStates[p2].numberHand.find(
+        n => n.id === room.turnData[p2]?.targetId
+      )?.value || 0
     },
     gameOver
   });
@@ -194,7 +197,6 @@ export const endRound = (
 /* ------------------------------------------------------------------ */
 /* --------------------- NUMBER HAND FACTORY ------------------------- */
 /* ------------------------------------------------------------------ */
-
 const generateNumberHand = () => {
   const hand = [];
   for (let i = 0; i < 5; i++) {
