@@ -156,11 +156,7 @@ export const GameScene = ({
         {showOpponentCard && (
           <NumberCard3D
             key="opponent-target"
-            value={
-              phase === "RESOLUTION" || phase === "GAME_OVER"
-                ? opponentTargetValue
-                : 0 // Hidden until revealed
-            }
+            value={opponentTargetValue}
             position={[0, 0.65, -2]}
             isUsed={false}
           />

@@ -31,8 +31,6 @@ export default function App() {
     setSelectedCardIds
   });
 
-  // Calculate Opponent Target for 3D Scene
-  const opponentTargetValue = state.roundResult?.opponentTargetValue ?? 0;
 
   return (
     <div style={rootStyle}>
@@ -49,7 +47,7 @@ export default function App() {
         selectedCardIds={state.selectedCardIds}
         globalDeck={state.globalDeck}
         targetValue={state.targetValue}
-        opponentTargetValue={opponentTargetValue}
+        opponentTargetValue={state.opponentTargetValue}
         bios={state.bios}
         opponentBios={state.opponentBios}
         onTargetClick={(id) => actions.selectTarget(id)}

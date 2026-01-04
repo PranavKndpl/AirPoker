@@ -18,7 +18,8 @@ export const useSocketEvents = (
   setSelectedCardIds: any,
   setRoundResult: any,
   setGameOver: any,
-  setOpponentLocked: any // <--- NEW
+  setOpponentLocked: any, // <--- NEW
+  setOpponentTargetValue: any
 ) => {
   useEffect(() => {
     /* ------------------ ROOM EVENTS ------------------- */
@@ -48,6 +49,7 @@ export const useSocketEvents = (
 
       // ✅ RESET opponent lock at new round
       setOpponentLocked(false);
+      setOpponentTargetValue(0);
     };
 
     const handleTimerSync = (time: number) => {
@@ -63,6 +65,17 @@ export const useSocketEvents = (
         const opId = Object.keys(biosData).find(id => id !== socket.id);
         if (opId) setOpponentBios(biosData[opId]);
       }
+    };
+
+    // NEW: Handle Reveal
+    const handleReveal = (data: Record<string, number>) => {
+       const myId = socket.id;
+       // Find the ID that is NOT mine
+       const opponentId = Object.keys(data).find(id => id !== myId);
+       if (opponentId) {
+          console.log("[GAME] Targets Revealed!");
+          setOpponentTargetValue(data[opponentId]); // <--- Updates state, Scene updates automatically
+       }
     };
 
     /* ---------------- RESULT HANDLING ----------------- */
@@ -128,6 +141,7 @@ export const useSocketEvents = (
 
     // ✅ NEW listener
     socket.on("player_status_update", handleStatusUpdate);
+    socket.on("reveal_targets", handleReveal);
 
     return () => {
       socket.off("room_created", handleRoomCreated);
@@ -137,6 +151,7 @@ export const useSocketEvents = (
       socket.off("round_result", handleRoundResult);
 
       socket.off("player_status_update", handleStatusUpdate); // cleanup
+      socket.off("reveal_targets", handleReveal);
     };
   }, []);
 };
