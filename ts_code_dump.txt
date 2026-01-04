@@ -1,0 +1,2713 @@
+PROJECT STRUCTURE:
+--------------------------------------------------------
+AIRPOKER/
+├── client/
+│   ├── node_modules/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   │
+│   │   ├── components/
+│   │   │   ├── Game/
+│   │   │   │   ├── BioChips3D.tsx
+│   │   │   │   ├── BioChipsSprite.tsx
+│   │   │   │   ├── Card3D.tsx
+│   │   │   │   ├── NumberCard3D.tsx
+│   │   │   │   ├── Table3D.tsx
+│   │   │   │   ├── TargetDisplay.tsx
+│   │   │   │   └── TargetSlot.tsx
+│   │   │   │
+│   │   │   ├── Scene/
+│   │   │   │   ├── Atmosphere.tsx
+│   │   │   │   └── GameScene.tsx
+│   │   │   │
+│   │   │   └── UI/
+│   │   │       ├── BettingPanel.tsx
+│   │   │       ├── GameHUD.tsx
+│   │   │       ├── Lobby.tsx
+│   │   │       ├── ResultScreen.tsx
+│   │   │       └── SelectionGrid.tsx
+│   │   │
+│   │   ├── game/
+│   │   │   ├── localSteps.ts
+│   │   │   ├── useGameActions.ts
+│   │   │   └── useGameState.ts
+│   │   │
+│   │   ├── network/
+│   │   │   └── socketBridge.ts
+│   │   │
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   └── socket.ts
+│   │
+│   └── .gitignore
+│
+├── server/
+│   ├── node_modules/
+│   ├── src/
+│   │   ├── core/
+│   │   │   ├── deck.ts
+│   │   │   ├── roundController.ts
+│   │   │   └── rules.ts
+│   │   │
+│   │   ├── sockets/
+│   │   │   └── handlers.ts
+│   │   │
+│   │   ├── state/
+│   │   │   └── roomStore.ts
+│   │   │
+│   │   ├── index.ts
+│   │   ├── roomManager.ts
+│   │   └── pokersolver.d.ts
+│   │
+│   ├── package.json
+│   ├── package-lock.json
+│   └── tsconfig.json
+│
+├── shared/
+│   └── types.ts
+│
+└── README.md (optional)
+------------------------------------------------------------
+
+
+CODES:
+=====================================================================================
+
+c:\Users\punnu\Desktop\AirPoker\client\src\App.tsx
+```
+// client/src/App.tsx
+import React from "react";
+import { useGameState } from "./game/useGameState";
+import { useGameActions } from "./game/useGameActions";
+import { LocalStep } from "./game/localSteps";
+
+import { GameScene } from "./components/Scene/GameScene";
+import { BettingPanel } from "./components/UI/BettingPanel";
+import { SelectionGrid } from "./components/UI/SelectionGrid";
+import { GameHUD } from "./components/UI/GameHUD";
+import { ResultScreen } from "./components/UI/ResultScreen";
+
+export default function App() {
+  const {
+    state,
+    setLocalStep,
+    setSelectedTargetId,
+    setSelectedCardIds,
+    openTableView,
+    closeTableView
+  } = useGameState();
+
+  const actions = useGameActions({
+    localStep: state.localStep,
+    overlay: state.overlay,
+    openTableView,
+    closeTableView,
+    setLocalStep,
+    selectedTargetId: state.selectedTargetId,
+    setSelectedTargetId,
+    selectedCardIds: state.selectedCardIds,
+    setSelectedCardIds
+  });
+
+  // Compute opponent target value
+  const opponentTargetValue =
+    state.roundResult?.opponentTargets
+      ? Object.values(state.roundResult.opponentTargets)[0] ?? 0
+      : 0;
+
+  return (
+    <div style={rootStyle}>
+      {/* ================= UI OVERLAY LAYER ================= */}
+      <div style={overlayRootStyle}>
+        {/* LOBBY */}
+        {state.phase === "LOBBY" && !state.roomId && (
+          <Overlay>
+            <button onClick={actions.createRoom} style={btnStyle}>
+              CREATE ROOM
+            </button>
+            <button
+              onClick={() => {
+                const id = prompt("Room ID");
+                if (id) actions.joinRoom(id);
+              }}
+              style={{ ...btnStyle, marginLeft: 20 }}
+            >
+              JOIN ROOM
+            </button>
+          </Overlay>
+        )}
+
+        {/* VIEW TABLE */}
+        {state.overlay === "VIEW_TABLE" &&
+          state.phase === "GAME_LOOP" && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 30,
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              zIndex: 100,
+              pointerEvents: "none"
+            }}
+          >
+            <button
+              onClick={actions.toggleViewTable}
+              style={{
+                ...btnStyle,
+                pointerEvents: "auto"
+              }}
+            >
+              RETURN TO GAME
+            </button>
+          </div>
+        )}
+
+        {/* WAITING */}
+        {state.localStep === LocalStep.WAITING && (
+          <Overlay>
+            <h2 style={{ color: "#ffd700" }}>
+              Waiting for opponent...
+            </h2>
+          </Overlay>
+        )}
+
+        {/* GAME OVER */}
+        {state.phase === "GAME_OVER" && (
+          <Overlay>
+            <h1 style={{ color: "#ffd700" }}>GAME OVER</h1>
+          </Overlay>
+        )}
+      </div>
+
+      {/* ================= RESULT SCREEN ================= */}
+      {state.roundResult && state.phase === "RESOLUTION" && (
+        <ResultScreen
+          result={state.roundResult}
+          onNextRound={actions.requestNextRound}
+        />
+      )}
+
+      {/* ================= 3D SCENE ================= */}
+      <GameScene
+        phase={state.phase}
+        myNumberHand={state.myNumberHand}
+        selectedTargetId={state.selectedTargetId}
+        selectedCardIds={state.selectedCardIds}
+        globalDeck={state.globalDeck}
+        targetValue={state.targetValue}
+        opponentTargetValue={0}
+        bios={state.bios}
+        opponentBios={state.opponentBios}
+        onTargetClick={(id) => actions.lockTarget(id)}
+      />
+
+      {/* ================= HUD ================= */}
+      <GameHUD
+        roomId={state.roomId}
+        timer={state.timer}
+        pot={state.pot}
+        bios={state.bios}
+        opponentBios={state.opponentBios}
+        phase={state.phase}
+      />
+
+      {/* ================= IN-GAME PANELS ================= */}
+      {state.phase === "GAME_LOOP" &&
+        state.localStep === LocalStep.BETTING &&
+        state.overlay === "NONE" && (
+          <BettingPanel
+            currentBios={state.bios}
+            onPlaceBet={actions.placeBet}
+            onToggleView={actions.toggleViewTable}
+          />
+        )}
+
+      {state.phase === "GAME_LOOP" &&
+        state.localStep === LocalStep.PICK_HAND &&
+        state.overlay === "NONE" && (
+          <SelectionGrid
+            deck={state.globalDeck}
+            selectedIds={state.selectedCardIds}
+            onToggle={actions.toggleCard}
+            onConfirm={actions.submitHand}
+            onClose={actions.toggleViewTable}
+            currentSum={state.currentSum}
+            targetValue={state.targetValue}
+          />
+        )}
+    </div>
+  );
+}
+
+/* ================= REUSABLE OVERLAY ================= */
+function Overlay({ children }: { children: React.ReactNode }) {
+  return <div style={overlayStyle}>{children}</div>;
+}
+
+/* ================= STYLES ================= */
+const rootStyle: React.CSSProperties = {
+  width: "100vw",
+  height: "100vh",
+  background: "#000",
+  overflow: "hidden"
+};
+
+const overlayRootStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9999,
+  pointerEvents: "none"
+};
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.85)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  pointerEvents: "auto"
+};
+
+const btnStyle: React.CSSProperties = {
+  padding: "15px 30px",
+  background: "#ffd700",
+  border: "none",
+  fontSize: "1.5rem",
+  fontWeight: "bold",
+  cursor: "pointer"
+};
+
+```
+
+
+c:\Users\punnu\Desktop\AirPoker\client\src\socket.ts
+```
+import { io, Socket } from "socket.io-client";
+
+// Connect to the server we just started
+const URL = "http://localhost:3001"; 
+
+export const socket: Socket = io(URL, {
+  autoConnect: false, // We connect only when the user clicks "Start"
+});
+
+// Debugging helper
+socket.onAny((event, ...args) => {
+  console.log(`[SOCKET] ${event}`, args);
+});
+```
+
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\BioChips3D.tsx
+```
+import React, { useRef, useMemo } from 'react';
+import { useTexture } from '@react-three/drei';
+import * as THREE from 'three';
+
+interface ChipProps {
+  position: [number, number, number];
+  texture: THREE.Texture; // Pass the loaded texture down
+}
+
+const SingleChip: React.FC<ChipProps> = ({ position, texture }) => {
+  // Random rotation so the "Bios" text isn't perfectly aligned like a robot stacked them
+  const randomRot = useRef(Math.random() * Math.PI * 2);
+
+  {/* The Latch Mechanism detail */}
+    <mesh position={[0.35, 0, 0]} castShadow>
+    <boxGeometry args={[0.1, 0.08, 0.1]} />
+    <meshStandardMaterial color="#b8860b" metalness={0.9} roughness={0.2} />
+    </mesh>
+
+  return (
+    <mesh position={position} rotation={[0, randomRot.current, 0]} castShadow receiveShadow>
+      {/* slightly thicker cylinder to match the beefy look of your reference image */}
+      <cylinderGeometry args={[0.35, 0.35, 0.1, 32]} />
+      
+      {/* MATERIAL 0: SIDE (Gold Metal) */}
+      <meshStandardMaterial attach="material-0" color="#ffcc00" roughness={0.2} metalness={0.9} />
+      
+      {/* MATERIAL 1: TOP (Your Image) */}
+      <meshStandardMaterial attach="material-1" map={texture} roughness={0.5} metalness={0.4} />
+      
+      {/* MATERIAL 2: BOTTOM (Gold Metal) */}
+      <meshStandardMaterial attach="material-2" color="#ffcc00" roughness={0.2} metalness={0.9} />
+    </mesh>
+  );
+};
+
+export const BioChips3D: React.FC<{ count: number; position: [number, number, number] }> = ({ count, position }) => {
+  // Load texture once for the whole stack (Optimization)
+  const biosTexture = useTexture('/bios_texture.png'); // Make sure this file is in /public
+  
+  // Create the stack array
+  const chips = useMemo(() => Array.from({ length: count }), [count]);
+
+  return (
+    <group position={position}>
+      {chips.map((_, i) => (
+        <SingleChip 
+          key={i} 
+          position={[0, i * 0.11, 0]} // Stack height
+          texture={biosTexture} 
+        />
+      ))}
+    </group>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\BioChipsSprite.tsx
+```
+import React, { useMemo } from 'react';
+import { useTexture, Billboard } from '@react-three/drei';
+import { useSpring, animated } from '@react-spring/three';
+
+interface ChipProps {
+  position: [number, number, number];
+  textureUrl: string;
+}
+
+const SingleSpriteChip: React.FC<ChipProps> = ({ position, textureUrl }) => {
+  const texture = useTexture(textureUrl);
+
+  return (
+    <Billboard
+      position={position}
+      follow={true} // Keep facing the camera
+      lockX={false}
+      lockY={false}
+      lockZ={false}
+    >
+      <mesh castShadow receiveShadow>
+        {/* Adjust size args to match your image aspect ratio */}
+        <planeGeometry args={[1, 1]} /> 
+        <meshStandardMaterial
+          map={texture}
+          transparent={true} // Crucial for PNG transparency
+          alphaTest={0.5}    // Helps cut out the background cleanly
+          roughness={0.4}
+          metalness={0.5}    // Allows the sprite to still react to scene light!
+        />
+      </mesh>
+    </Billboard>
+  );
+};
+
+export const BioChipsStack: React.FC<{ count: number; position: [number, number, number] }> = ({ count, position }) => {
+  // Memoize the array so we don't recalculate on every frame
+  const chips = useMemo(() => Array.from({ length: count }), [count]);
+
+  return (
+    <group position={position}>
+      {chips.map((_, i) => (
+        <SingleSpriteChip
+          key={i}
+          // The Y offset determines how "tall" the stack looks. 
+          // Since it's a sprite, we stack them tightly (0.05).
+          position={[0, i * 0.08, 0]} 
+          textureUrl="/bios_chip.png" 
+        />
+      ))}
+    </group>
+  );
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\Card3D.tsx
+```
+import React, { useState } from 'react';
+import { useSpring, animated } from '@react-spring/three';
+import { Text, useTexture } from '@react-three/drei';
+import * as THREE from 'three';
+
+const SUIT_COLORS = {
+  '♠': '#2c2c2c', 
+  '♣': '#2c2c2c',
+  '♥': '#d12e2e', 
+  '♦': '#d12e2e',
+};
+
+interface CardProps {
+  position: [number, number, number];
+  rank: string;
+  suit: '♠' | '♥' | '♣' | '♦';
+  isFaceUp?: boolean;
+  isSelected?: boolean;
+  onClick?: () => void;
+}
+
+export const Card3D: React.FC<CardProps> = ({ 
+  position, rank, suit, isFaceUp = true, isSelected = false, onClick 
+}) => {
+  const [hovered, setHover] = useState(false);
+  
+  // Verify this matches your file name exactly
+  const backTexture = useTexture('/card_back_gold.png'); 
+
+  const { pos, rot, scale } = useSpring({
+    pos: isSelected ? [position[0], position[1] + 1.2, position[2] + 0.5] : hovered ? [position[0], position[1] + 0.3, position[2]] : position,
+    rot: isSelected ? [-Math.PI / 3, 0, 0] : [-Math.PI / 2, 0, 0],
+    scale: isSelected || hovered ? 1.1 : 1,
+    config: { mass: 1, tension: 220, friction: 20 }
+  });
+
+  const color = SUIT_COLORS[suit] || '#000';
+
+  const CornerValue = ({ rotation = [0, 0, 0], position }: any) => (
+    <group position={position} rotation={rotation as any}>
+      {/* REMOVED FONT PROP */}
+      <Text position={[0, 0, 0]} fontSize={0.22} color={color} anchorX="center" anchorY="middle">
+        {rank}
+      </Text>
+      <Text position={[0, -0.22, 0]} fontSize={0.18} color={color} anchorX="center" anchorY="middle">
+        {suit}
+      </Text>
+    </group>
+  );
+
+  return (
+    <animated.group position={pos as any} rotation={rot as any} scale={scale} onClick={onClick} onPointerOver={() => setHover(true)} onPointerOut={() => setHover(false)}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[1.4, 2.0, 0.02]} />
+        <meshStandardMaterial attach="material-0" color="#e0e0e0" />
+        <meshStandardMaterial attach="material-1" color="#e0e0e0" />
+        <meshStandardMaterial attach="material-2" color="#e0e0e0" />
+        <meshStandardMaterial attach="material-3" color="#e0e0e0" />
+        <meshStandardMaterial attach="material-4" color="#fcfcfc" roughness={0.6} metalness={0.0} />
+        <meshStandardMaterial 
+          attach="material-5" 
+          map={backTexture} 
+          color="#ffffff" 
+          metalness={0.9} 
+          roughness={0.3} 
+          bumpMap={backTexture}
+          bumpScale={0.02}
+        />
+      </mesh>
+
+      {isFaceUp && (
+        <group position={[0, 0, 0.011]}>
+          <CornerValue position={[-0.55, 0.85, 0]} />
+          <CornerValue position={[0.55, -0.85, 0]} rotation={[0, 0, Math.PI]} />
+
+          {['J', 'Q', 'K'].includes(rank) ? (
+             // REMOVED FONT PROP
+             <Text position={[0, 0, 0]} fontSize={1.2} color={color} fillOpacity={0.15}>
+               {rank}
+             </Text>
+          ) : (
+             <Text position={[0, 0, 0]} fontSize={1.0} color={color}>
+               {suit}
+             </Text>
+          )}
+        </group>
+      )}
+    </animated.group>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\NumberCard3D.tsx
+```
+import React, { useState } from 'react';
+import { useSpring, animated } from '@react-spring/three';
+import { Text } from '@react-three/drei';
+
+interface NumberCardProps {
+  value: number;
+  position: [number, number, number];
+  isSelected?: boolean;
+  isUsed?: boolean;
+  onClick?: () => void;
+}
+
+export const NumberCard3D: React.FC<NumberCardProps> = ({ value, position, isSelected, isUsed, onClick }) => {
+  const [hovered, setHover] = useState(false);
+
+  const { pos, rot, color } = useSpring({
+    // If selected, it lifts up slightly higher to show it's active
+    pos: isSelected ? [position[0], position[1] + 0.2, position[2]] : position, 
+    rot: [-Math.PI / 2, 0, 0],
+    color: isUsed ? '#333' : (isSelected ? '#ffaa00' : '#880000'), 
+    config: { tension: 180, friction: 12 }
+  });
+
+  return (
+    <animated.group 
+      position={pos as any} 
+      rotation={rot as any} 
+      onClick={!isUsed ? onClick : undefined}
+      onPointerOver={() => !isUsed && setHover(true)}
+      onPointerOut={() => setHover(false)}
+      scale={hovered && !isUsed ? 1.1 : 1}
+    >
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[1.4, 2.0, 0.02]} />
+        {/* Metalness gives it that heavy gold/plate look */}
+        <animated.meshStandardMaterial color={color} roughness={0.3} metalness={0.6} />
+      </mesh>
+
+      <group position={[0, 0, 0.02]}>
+         {value > 0 && ( // Only show text if value is real
+            <Text fontSize={0.8} color="white">
+            {value}
+            </Text>
+        )}
+         <Text position={[0, -0.6, 0]} fontSize={0.15} color="#ffffff80">
+           TARGET
+         </Text>
+      </group>
+    </animated.group>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\Table3D.tsx
+```
+import React from 'react';
+import { RoundedBox } from '@react-three/drei';
+
+export const Table3D = () => {
+  return (
+    <group position={[0, -0.5, 0]}>
+      {/* THE TABLE TOP (The Felt Surface) */}
+      <RoundedBox args={[22, 1, 14]} radius={0.2} smoothness={4} position={[0, 0, 0]} receiveShadow>
+        {/* Material 0-3: Sides (Dark Wood) */}
+        <meshStandardMaterial attach="material-0" color="#2a1b0e" roughness={0.4} />
+        <meshStandardMaterial attach="material-1" color="#2a1b0e" roughness={0.4} />
+        <meshStandardMaterial attach="material-2" color="#0a0a0a" roughness={0.9} /> {/* Top - we cover this below */}
+        <meshStandardMaterial attach="material-3" color="#2a1b0e" roughness={0.4} />
+        
+        {/* Material 4: Front (Wood) */}
+        <meshStandardMaterial attach="material-4" color="#2a1b0e" roughness={0.4} />
+        {/* Material 5: Back (Wood) */}
+        <meshStandardMaterial attach="material-5" color="#2a1b0e" roughness={0.4} />
+      </RoundedBox>
+
+      {/* THE PLAYING SURFACE (The Felt Layer) */}
+      {/* We place a slightly smaller plane on top to be the "cloth" */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.51, 0]} receiveShadow>
+        <planeGeometry args={[20, 12]} />
+        <meshStandardMaterial 
+          color="#5c2626" // Deep Dark Red (Usogui style)
+          roughness={1}   // Fabric is very rough, no shine
+          metalness={0} 
+        />
+      </mesh>
+
+      {/* OPTIONAL: Table Border Light (The glowing yellow edge from your reference) */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.52, 0]}>
+        <ringGeometry args={[9.8, 10, 64]} />
+        <meshBasicMaterial color="#ffaa00" transparent opacity={0.3} />
+      </mesh>
+    </group>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\TargetDisplay.tsx
+```
+import React from 'react';
+import { Text, Float } from '@react-three/drei';
+
+export const TargetDisplay = ({ value }: { value: number }) => {
+  return (
+    <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
+      <group position={[0, 1.5, 0]}>
+        {/* Glass Panel */}
+        <mesh position={[0, 0, 0]}>
+          <boxGeometry args={[3, 1.5, 0.1]} />
+          <meshPhysicalMaterial 
+            color="#000000" 
+            transmission={0.9} 
+            opacity={0.5} 
+            roughness={0} 
+            thickness={0.5} 
+          />
+        </mesh>
+        
+        {/* Border */}
+        <mesh position={[0, 0, 0]}>
+            <boxGeometry args={[3.05, 1.55, 0.08]} />
+            <meshBasicMaterial color="#ffaa00" wireframe />
+        </mesh>
+
+        {/* Label - REMOVED FONT PROP */}
+        <Text 
+          position={[0, 0.4, 0.06]} 
+          fontSize={0.2} 
+          color="#ffaa00" 
+          letterSpacing={0.2}
+        >
+          TARGET SUM
+        </Text>
+
+        {/* Number - REMOVED FONT PROP */}
+        <Text 
+          position={[0, -0.1, 0.06]} 
+          fontSize={0.8} 
+          color="#ff3333" 
+          anchorY="middle"
+        >
+          {value}
+        </Text>
+      </group>
+    </Float>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Game\TargetSlot.tsx
+```
+import React from 'react';
+import { Text } from '@react-three/drei';
+
+export const TargetSlot = ({ position, label }: { position: [number, number, number], label?: string }) => {
+  return (
+    <group position={position}>
+      {/* 1. The "Scanner" Base (Transparent Glass) */}
+      <mesh receiveShadow rotation={[-Math.PI/2, 0, 0]}>
+        <planeGeometry args={[1.6, 2.2]} />
+        <meshStandardMaterial 
+          color="#000" 
+          transparent 
+          opacity={0.3} 
+        />
+      </mesh>
+      
+      {/* 2. Glowing Border (The Zone Indicator) */}
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI/2, 0, 0]}>
+        <ringGeometry args={[1.0, 1.05, 32]} /> {/* Simple Ring or Box Border */}
+        {/* Let's stick to the box shape for cards */}
+      </mesh>
+      <lineSegments position={[0, 0.02, 0]}>
+         <edgesGeometry args={[new THREE.BoxGeometry(1.6, 2.2, 0.05)]} />
+         <lineBasicMaterial color="#444" opacity={0.5} transparent />
+      </lineSegments>
+
+      {/* 3. Label */}
+      {label && (
+        <Text 
+          position={[0, 0.05, -1.3]} // Moved slightly back so it's readable on table
+          fontSize={0.15} 
+          color="#888" 
+          rotation={[-Math.PI/2, 0, 0]}
+          anchorY="top"
+        >
+          {label}
+        </Text>
+      )}
+    </group>
+  );
+};
+import * as THREE from 'three'; // Ensure THREE is imported for BoxGeometry
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Scene\Atmosphere.tsx
+```
+import { useRef, useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
+
+type Bubble = {
+  position: [number, number, number];
+  radius: number;
+};
+
+export const Atmosphere = () => {
+  const groupRef = useRef<THREE.Group>(null);
+
+  // 🔒 Generate bubbles ONCE
+  const bubbles = useMemo<Bubble[]>(() => {
+    return Array.from({ length: 50 }).map(() => ({
+      position: [
+        (Math.random() - 0.5) * 20,
+        Math.random() * 15,
+        (Math.random() - 0.5) * 10
+      ],
+      radius: 0.05 + Math.random() * 0.1
+    }));
+  }, []);
+
+  // 🎞️ Animate smoothly forever
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+
+    groupRef.current.position.y += delta * 0.2;
+    groupRef.current.rotation.y += delta * 0.1;
+
+    if (groupRef.current.position.y > 5) {
+      groupRef.current.position.y = -5;
+    }
+  });
+
+  return (
+    <>
+      <color attach="background" args={["#050505"]} />
+      <fog attach="fog" args={["#050505", 5, 25]} />
+
+      <ambientLight intensity={0.2} color="#4a4a4a" />
+
+      <spotLight
+        position={[0, 10, 0]}
+        angle={0.4}
+        penumbra={0.5}
+        intensity={2}
+        castShadow
+        color="#fff0d6"
+      />
+
+      <group ref={groupRef} position={[0, -5, 0]}>
+        {bubbles.map((b, i) => (
+          <mesh key={i} position={b.position}>
+            <sphereGeometry args={[b.radius, 16, 16]} />
+            <meshStandardMaterial
+              color="#88ccff"
+              transparent
+              opacity={0.4}
+              roughness={0}
+              metalness={0.8}
+            />
+          </mesh>
+        ))}
+      </group>
+    </>
+  );
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\Scene\GameScene.tsx
+```
+// client/src/components/Scene/GameScene.tsx
+import { Suspense, useEffect } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+
+import {
+  OrbitControls,
+  PerspectiveCamera,
+  Environment,
+  ContactShadows,
+  Html,
+} from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette, Noise } from "@react-three/postprocessing";
+
+import { Atmosphere } from "./Atmosphere";
+import { Table3D } from "../Game/Table3D";
+import { BioChipsStack } from "../Game/BioChipsSprite";
+import { Card3D } from "../Game/Card3D";
+import { NumberCard3D } from "../Game/NumberCard3D";
+import { TargetSlot } from "../Game/TargetSlot";
+
+import type { SuitSymbol } from "../../../../shared/types";
+
+interface NumberCard {
+  id: string;
+  value: number;
+  isUsed: boolean;
+}
+
+interface PlayingCard {
+  id: string;
+  rank: string;
+  suit: SuitSymbol;
+  value: number;
+}
+
+interface GameSceneProps {
+  phase: string;
+  myNumberHand: NumberCard[];
+  selectedTargetId: string | null;
+  selectedCardIds: string[];
+  globalDeck: PlayingCard[];
+  targetValue: number;
+  opponentTargetValue: number;
+  bios: number;
+  opponentBios: number;
+  onTargetClick: (id: string) => void;
+}
+
+const Loader = () => (
+  <Html center>
+    <div className="text-yellow-500 font-mono">LOADING...</div>
+  </Html>
+);
+
+export const GameScene = ({
+  phase,
+  myNumberHand,
+  selectedTargetId,
+  selectedCardIds,
+  globalDeck,
+  targetValue,
+  opponentTargetValue,
+  bios,
+  opponentBios,
+  onTargetClick,
+}: GameSceneProps) => {
+
+  // ------------------- INIT SCENE -------------------
+  useEffect(() => {
+    console.log("Scene initialized");
+    return () => {
+      console.log("Scene disposed");
+    };
+  }, []);
+
+  // ------------------- DATA-UPDATES -------------------
+  useEffect(() => {
+    // Only update visuals when data changes
+    // For example: update number cards, deck positions
+    console.log("Deck/hand updated", { globalDeck, myNumberHand });
+  }, [globalDeck, myNumberHand, selectedCardIds, selectedTargetId, opponentTargetValue]);
+
+  return (
+    <Canvas shadows style={{ position: "absolute", inset: 0 }}>
+      {/* ---------------- CAMERA & LIGHT ---------------- */}
+      <PerspectiveCamera makeDefault position={[0, 18, 12]} fov={35} />
+      <ambientLight intensity={0.4} />
+
+      <Suspense fallback={<Loader />}>
+        <Environment preset="city" blur={1} />
+        <Atmosphere />
+        <Table3D />
+        {/*enableNormalPass */}
+        <EffectComposer> 
+          <Bloom luminanceThreshold={1} intensity={1.5} radius={0.5} />
+          <Vignette darkness={1.0} />
+          <Noise opacity={0.05} />
+        </EffectComposer>
+
+        {/* ---------------- TABLE SLOTS ---------------- */}
+        <TargetSlot position={[0, 0.55, 2]} label="YOUR TARGET" />
+        <TargetSlot position={[0, 0.55, -2]} label="OPPONENT" />
+
+        {/* ---------------- PLAYER NUMBER CARDS ---------------- */}
+        {myNumberHand.map((card, i) => {
+          const isSelected = card.id === selectedTargetId;
+          const position: [number, number, number] = isSelected
+            ? [0, 0.6, 2]
+            : [(i - 2) * 1.8, 0.55, 5];
+
+          return (
+            <NumberCard3D
+              key={card.id}
+              value={card.value}
+              position={position}
+              isSelected={isSelected}
+              isUsed={card.isUsed}
+              onClick={() => onTargetClick(card.id)}
+            />
+          );
+        })}
+
+        {/* ---------------- OPPONENT TARGET ---------------- */}
+        {opponentTargetValue > 0 && (
+          <NumberCard3D
+            key="opponent-target"
+            value={opponentTargetValue}
+            position={[0, 0.65, -2]}
+            isUsed
+          />
+        )}
+
+        {/* ---------------- PLAYING CARDS ---------------- */}
+        {selectedCardIds.map((id, i) => {
+          const card = globalDeck.find(c => c.id === id);
+          if (!card) return null;
+
+          return (
+            <Card3D
+              key={card.id}
+              position={[(i - 2) * 1.5, 0.6, 0]}
+              rank={card.rank}
+              suit={card.suit} // ✅ Already SuitSymbol
+            />
+          );
+        })}
+
+        {/* ---------------- CHIPS ---------------- */}
+        <BioChipsStack count={bios} position={[-6, 0.55, 3]} />
+        <BioChipsStack count={opponentBios} position={[6, 0.55, -3]} />
+      </Suspense>
+
+      <ContactShadows opacity={0.7} scale={40} blur={2} />
+      <OrbitControls
+        maxPolarAngle={Math.PI / 2.1}
+        minDistance={10}
+        maxDistance={30}
+      />
+    </Canvas>
+  );
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\UI\BettingPanel.tsx
+```
+// client/src/components/UI/BettingPanel.tsx
+import React, { useState } from 'react';
+
+interface Props {
+  currentBios: number;
+  onPlaceBet: (amount: number) => void;
+  onToggleView: () => void; // <--- New Prop
+}
+
+export const BettingPanel: React.FC<Props> = ({ currentBios, onPlaceBet, onToggleView }) => {
+  const [bet, setBet] = useState(0);
+
+  return (
+    <div style={{
+    position: 'fixed',
+    bottom: 40,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 20,
+    pointerEvents: 'auto'
+  }}>
+
+      {/* THE BOX */}
+      <div style={{
+        pointerEvents: 'auto',
+        background: '#111', border: '1px solid #ffd700', borderRadius: 12,
+        padding: 40, width: 400, textAlign: 'center',
+        boxShadow: '0 0 50px rgba(255, 215, 0, 0.2)',
+        position: 'relative' // For absolute positioning of close button
+      }}>
+        
+        {/* CLOSE / VIEW TABLE BUTTON */}
+        <button 
+            onClick={onToggleView}
+            style={{
+                position: 'absolute', top: 10, right: 10,
+                background: 'transparent', border: '1px solid #444', color: '#888',
+                borderRadius: '50%', width: 30, height: 30, cursor: 'pointer',
+                fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            title="View Table"
+        >
+            👁️
+        </button>
+
+        <h2 style={{ color: '#ffd700', fontSize: '2rem', marginBottom: 30, textTransform: 'uppercase' }}>
+          Wager Air
+        </h2>
+
+        <div style={{ fontSize: '4rem', color: 'white', fontWeight: 'bold', fontFamily: 'monospace' }}>
+          {bet}
+        </div>
+        <div style={{ color: '#666', marginBottom: 30 }}>BIOS</div>
+
+        <input 
+          type="range" min="0" max={currentBios} value={bet} 
+          onChange={(e) => setBet(parseInt(e.target.value))}
+          style={{ width: '100%', marginBottom: 30, accentColor: '#ffd700' }}
+        />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 30 }}>
+            <button onClick={() => setBet(0)} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Check (0)</button>
+            <button onClick={() => setBet(Math.floor(currentBios/2))} style={{ background: '#333', border: 'none', color: '#888', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>Half</button>
+            <button onClick={() => setBet(currentBios)} style={{ background: '#500', border: 'none', color: '#faa', padding: '5px 10px', borderRadius: 4, cursor: 'pointer' }}>ALL IN</button>
+        </div>
+
+        <button 
+          onClick={() => onPlaceBet(bet)}
+          style={{
+            width: '100%', padding: 15,
+            background: '#ffd700', border: 'none', borderRadius: 6,
+            fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer'
+          }}
+        >
+          CONFIRM WAGER
+        </button>
+      </div>
+    </div>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\UI\GameHUD.tsx
+```
+import React from "react";
+import type { GamePhase } from "../../../../shared/types";
+
+interface GameHUDProps {
+  roomId: string | null;
+  timer: number;
+  pot: number;
+  bios: number;
+  opponentBios: number;
+  phase: GamePhase;
+}
+
+export const GameHUD: React.FC<GameHUDProps> = ({
+  roomId,
+  timer,
+  pot,
+  bios,
+  opponentBios,
+  phase,
+}) => {
+  return (
+    <>
+      {/* TOP-LEFT: TITLE + ROOM + TIMER */}
+      <div style={topLeft}>
+        <div style={title}>AIR POKER</div>
+
+        {roomId && (
+          <div style={room}>
+            ROOM: <span style={{ color: "#ffd700" }}>{roomId}</span>
+          </div>
+        )}
+
+        {phase !== "LOBBY" && (
+          <div style={timerStyle(timer)}>
+            ⏳ {timer}s
+          </div>
+        )}
+
+        {phase === "LOBBY" && roomId && (
+          <div style={waiting}>Waiting for opponent…</div>
+        )}
+      </div>
+
+      {/* TOP-RIGHT: POT + BIOS */}
+      {phase !== "LOBBY" && (
+        <div style={topRight}>
+          <div style={potStyle}>POT: {pot}</div>
+          <div style={biosStyle}>YOU: {bios} BIOS</div>
+          <div style={opponentBiosStyle}>OPP: {opponentBios} BIOS</div>
+        </div>
+      )}
+    </>
+  );
+};
+
+/* ---------------- styles ---------------- */
+
+const topLeft: React.CSSProperties = {
+  position: "absolute",
+  top: 24,
+  left: 24,
+  zIndex: 20,
+  pointerEvents: "none",
+};
+
+const title: React.CSSProperties = {
+  fontSize: "3rem",
+  fontWeight: "bold",
+  color: "#ffd700",
+  letterSpacing: 2,
+};
+
+const room: React.CSSProperties = {
+  marginTop: 4,
+  fontSize: "0.9rem",
+  color: "#888",
+};
+
+const waiting: React.CSSProperties = {
+  marginTop: 12,
+  fontSize: "1.1rem",
+  color: "#aaa",
+  animation: "pulse 1.5s infinite",
+};
+
+const timerStyle = (t: number): React.CSSProperties => ({
+  marginTop: 12,
+  fontSize: "2rem",
+  fontWeight: "bold",
+  color: t <= 10 ? "#ff3333" : "#ffffff",
+});
+
+const topRight: React.CSSProperties = {
+  position: "absolute",
+  top: 24,
+  right: 24,
+  zIndex: 20,
+  textAlign: "right",
+  pointerEvents: "none",
+};
+
+const potStyle: React.CSSProperties = {
+  fontSize: "2rem",
+  fontWeight: "bold",
+  color: "#ffd700",
+  textShadow: "0 0 10px rgba(255,215,0,0.6)",
+};
+
+const biosStyle: React.CSSProperties = {
+  marginTop: 6,
+  fontSize: "1.1rem",
+  color: "#ffffff",
+};
+
+const opponentBiosStyle: React.CSSProperties = {
+  fontSize: "0.95rem",
+  color: "#888",
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\UI\Lobby.tsx
+```
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\UI\ResultScreen.tsx
+```
+import React from "react";
+
+interface HandInfo {
+  name: string;
+  strength: number;
+}
+
+interface RoundResult {
+  outcome: "WIN" | "LOSE" | "DRAW";
+  playerHand?: HandInfo;
+  opponentHand?: HandInfo;
+  opponentTargets?: Record<string, number>;
+}
+
+interface ResultScreenProps {
+  result: RoundResult;
+  onNextRound: () => void;
+}
+
+export const ResultScreen: React.FC<ResultScreenProps> = ({
+  result,
+  onNextRound
+}) => {
+  // 🔒 HARD GUARDS (THIS PREVENTS BLANK SCREENS)
+  if (!result) return null;
+
+  const { playerHand, opponentHand } = result;
+
+  if (!playerHand || !opponentHand) {
+    console.warn("[ResultScreen] Invalid roundResult:", result);
+
+    return (
+      <div style={overlayStyle}>
+        <div style={panelStyle}>
+          <h2 style={{ color: "#ff4444" }}>RESULT ERROR</h2>
+          <p>Round resolved but hand data is missing.</p>
+          <button onClick={onNextRound} style={btnStyle}>
+            CONTINUE
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const opponentTargetValue = result.opponentTargets
+    ? Object.values(result.opponentTargets)[0] ?? 0
+    : 0;
+
+  const outcomeText =
+    result.outcome === "WIN"
+      ? "YOU WIN"
+      : result.outcome === "LOSE"
+      ? "YOU LOSE"
+      : "DRAW";
+
+  const outcomeColor =
+    result.outcome === "WIN"
+      ? "#00ff88"
+      : result.outcome === "LOSE"
+      ? "#ff4444"
+      : "#cccccc";
+
+  return (
+    <div style={overlayStyle}>
+      <div style={panelStyle}>
+        <h1 style={{ ...titleStyle, color: outcomeColor }}>
+          {outcomeText}
+        </h1>
+
+        <div style={sectionStyle}>
+          <h3>Your Hand</h3>
+          <p>
+            {playerHand.name} 
+          </p>
+        </div>
+
+        <div style={sectionStyle}>
+          <h3>Opponent Hand</h3>
+          <p>
+            {opponentHand.name} ({opponentHand.strength})
+          </p>
+          <p>Number Card: {opponentTargetValue}</p>
+        </div>
+
+        <button onClick={onNextRound} style={btnStyle}>
+          NEXT ROUND
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ================= STYLES ================= */
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.85)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 10000,
+  pointerEvents: "auto"
+};
+
+const panelStyle: React.CSSProperties = {
+  textAlign: "center",
+  color: "#ffd700",
+  padding: "40px 60px",
+  border: "2px solid #ffd700",
+  background: "#000",
+  minWidth: 400
+};
+
+const titleStyle: React.CSSProperties = {
+  marginBottom: 30,
+  fontSize: "3rem"
+};
+
+const sectionStyle: React.CSSProperties = {
+  marginBottom: 25,
+  fontSize: "1.2rem"
+};
+
+const btnStyle: React.CSSProperties = {
+  padding: "15px 30px",
+  background: "#ffd700",
+  border: "none",
+  fontSize: "1.5rem",
+  fontWeight: "bold",
+  cursor: "pointer"
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\components\UI\SelectionGrid.tsx
+```
+import React from 'react';
+
+type PlayingCard = { id: string; suit: string; rank: string; value: number; usedBy: string | null };
+
+interface GridProps {
+  deck: PlayingCard[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  onConfirm: () => void;
+  onClose: () => void;
+  currentSum: number;
+  targetValue: number;
+}
+
+export const SelectionGrid: React.FC<GridProps> = ({ deck, selectedIds, onToggle, onConfirm, onClose, currentSum, targetValue }) => {
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 20,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 20,
+      pointerEvents: 'auto'
+    }}>
+      
+      {/* THE PANEL CONTAINER */}
+      <div style={{
+        pointerEvents: 'auto',
+        background: 'rgba(5, 5, 5, 0.96)', // Darker, cleaner background
+        border: '1px solid #444',
+        borderRadius: 16,
+        boxShadow: '0 0 80px rgba(0,0,0,1)', // Massive shadow for depth
+        width: '90%',
+        maxWidth: '1200px',
+        aspectRatio: '16/9', // Force a cinematic wide ratio
+        maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        position: 'relative',
+        padding: 20
+      }}>
+
+        {/* --- CLOSE BUTTON (Fixed Z-Index) --- */}
+        <button 
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: -15, right: -15, // Floating slightly outside/corner
+            width: 40, height: 40,
+            background: '#ff3333',
+            color: 'white',
+            border: '2px solid white',
+            borderRadius: '50%',
+            fontSize: '1.2rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            zIndex: 100, // Highest Priority
+            boxShadow: '0 0 10px #ff0000',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+          title="Cancel Selection"
+        >
+          ✕
+        </button>
+
+        {/* --- THE 52 CARD GRID (Perfect Fit) --- */}
+        <div style={{
+          flex: 1,
+          display: 'grid',
+          // 13 Columns (Ranks), 4 Rows (Suits)
+          gridTemplateColumns: 'repeat(13, 1fr)',
+          gridTemplateRows: 'repeat(4, 1fr)', 
+          gap: '0.5vw', // Responsive gap
+          paddingBottom: 20
+        }}>
+          {deck.map(card => {
+            const isSelected = selectedIds.includes(card.id);
+            const isBurned = card.usedBy !== null;
+            
+            // Determine Color
+            let textColor = '#000';
+            if (isBurned) textColor = '#444';
+            else if (['♥', '♦'].includes(card.suit) && !isSelected) textColor = '#d00';
+            
+            return (
+              <button
+                key={card.id}
+                disabled={isBurned}
+                onClick={() => onToggle(card.id)}
+                style={{
+                  width: '100%', 
+                  height: '100%', // Fill the grid cell exactly
+                  background: isBurned ? '#1a1a1a' : isSelected ? '#ffd700' : '#f0f0f0',
+                  color: textColor,
+                  border: isSelected ? '3px solid white' : 'none',
+                  borderRadius: 4,
+                  fontWeight: 'bold', 
+                  fontSize: 'clamp(0.8rem, 1.5vw, 1.5rem)', // Responsive Text
+                  opacity: isBurned ? 0.2 : 1,
+                  cursor: isBurned ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: isSelected ? '0 0 15px #ffd700' : 'none',
+                  transition: 'transform 0.1s'
+                }}
+                onMouseDown={e => !isBurned && (e.currentTarget.style.transform = 'scale(0.95)')}
+                onMouseUp={e => !isBurned && (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                {/* Stack Rank and Suit vertically for better fit? Or side by side? Side by side is standard */}
+                <span>{card.rank}</span>
+                <span style={{fontSize: '0.8em', marginLeft: 2}}>{card.suit}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* --- BOTTOM HUD --- */}
+        <div style={{ 
+          background: '#111', 
+          borderRadius: 8,
+          padding: '10px 20px', 
+          border: '1px solid #333',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+          height: 60, flexShrink: 0 
+        }}>
+          {/* MATH DISPLAY */}
+          <div style={{ fontSize: '1.2rem', fontFamily: 'monospace', color: '#888', display: 'flex', alignItems: 'center', gap: 20 }}>
+             <div>TARGET: <span style={{ color: '#fff', fontSize: '1.5rem' }}>{targetValue}</span></div>
+             <div style={{ width: 2, height: 20, background: '#444' }} />
+             <div>SUM: <span style={{ color: currentSum === targetValue ? '#0f0' : '#fff', fontSize: '1.5rem', fontWeight: 'bold' }}>{currentSum}</span></div>
+          </div>
+
+          {/* CONFIRM BUTTON */}
+          <button 
+            onClick={onConfirm}
+            disabled={currentSum !== targetValue || selectedIds.length !== 5}
+            style={{
+              height: '100%',
+              padding: '0 40px',
+              backgroundColor: (currentSum === targetValue && selectedIds.length === 5) ? '#ffd700' : '#222',
+              color: (currentSum === targetValue && selectedIds.length === 5) ? 'black' : '#555',
+              fontWeight: 'bold',
+              fontSize: '1rem',
+              border: 'none',
+              borderRadius: 4,
+              cursor: (currentSum === targetValue && selectedIds.length === 5) ? 'pointer' : 'not-allowed',
+              textTransform: 'uppercase',
+              letterSpacing: 1
+            }}
+          >
+            Confirm Hand
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\game\localSteps.ts
+```
+// client/src/game/localSteps.ts
+
+export const LocalStep = {
+  PICK_TARGET: "PICK_TARGET",
+  BETTING: "BETTING",
+  PICK_HAND: "PICK_HAND",
+  WAITING: "WAITING",
+  VIEW_TABLE: "VIEW_TABLE"
+} as const;
+
+export type LocalStep = typeof LocalStep[keyof typeof LocalStep];
+
+const allowedTransitions: Record<LocalStep, LocalStep[]> = {
+  PICK_TARGET: ["BETTING"],
+  BETTING: ["PICK_HAND", "VIEW_TABLE"],
+  PICK_HAND: ["WAITING", "VIEW_TABLE"],
+  WAITING: [],
+  VIEW_TABLE: []
+};
+
+export const canTransition = (
+  from: LocalStep,
+  to: LocalStep
+): boolean => {
+  return allowedTransitions[from]?.includes(to) ?? false;
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\game\useGameActions.ts
+```
+// client/src/game/useGameActions.ts
+import { socket } from "../network/socketBridge";
+import { LocalStep, canTransition } from "./localSteps";
+
+interface Params {
+  localStep: LocalStep;
+
+  overlay: "NONE" | "VIEW_TABLE";
+  openTableView: () => void;
+  closeTableView: () => void;
+
+  setLocalStep: (step: LocalStep) => void;
+
+  selectedTargetId: string | null;
+  setSelectedTargetId: (id: string | null) => void;
+
+  selectedCardIds: string[];
+  setSelectedCardIds: (ids: string[]) => void;
+}
+
+export const useGameActions = ({
+  localStep,
+  overlay,
+  openTableView,
+  closeTableView,
+  setLocalStep,
+  selectedTargetId,
+  setSelectedTargetId,
+  selectedCardIds,
+  setSelectedCardIds
+}: Params) => {
+  /* -------------------------------------------------- */
+  /* ---------------- ROOM ACTIONS -------------------- */
+  /* -------------------------------------------------- */
+
+  const createRoom = () => {
+    socket.connect();
+    socket.emit("create_room");
+  };
+
+  const joinRoom = (roomId: string) => {
+    socket.connect();
+    socket.emit("join_room", { roomId });
+  };
+
+  /* -------------------------------------------------- */
+  /* ---------------- GAME FLOW ----------------------- */
+  /* -------------------------------------------------- */
+
+  const lockTarget = (targetId: string) => {
+    if (!canTransition(localStep, LocalStep.BETTING)) return;
+
+    setSelectedTargetId(targetId);
+    setLocalStep(LocalStep.BETTING);
+
+    socket.emit("action_target", { targetId });
+  };
+
+  const placeBet = (amount: number) => {
+    if (!canTransition(localStep, LocalStep.PICK_HAND)) return;
+
+    setLocalStep(LocalStep.PICK_HAND);
+    socket.emit("action_bet", { amount });
+  };
+
+  const toggleCard = (cardId: string) => {
+    if (localStep !== LocalStep.PICK_HAND) return;
+
+    if (selectedCardIds.includes(cardId)) {
+      setSelectedCardIds(selectedCardIds.filter(id => id !== cardId));
+    } else if (selectedCardIds.length < 5) {
+      setSelectedCardIds([...selectedCardIds, cardId]);
+    }
+  };
+
+  const submitHand = () => {
+    if (localStep !== LocalStep.PICK_HAND) return;
+    if (!selectedTargetId) return;
+    if (selectedCardIds.length !== 5) return;
+
+    setLocalStep(LocalStep.WAITING);
+    socket.emit("action_submit", { cardIds: selectedCardIds });
+  };
+
+  const requestNextRound = () => {
+    socket.emit("next_round_request");
+  };
+
+  /* -------------------------------------------------- */
+  /* ---------------- VIEW CONTROL -------------------- */
+  /* -------------------------------------------------- */
+
+  const toggleViewTable = () => {
+    if (overlay === "VIEW_TABLE") {
+      closeTableView();
+    } else {
+      openTableView();
+    }
+  };
+
+  return {
+    createRoom,
+    joinRoom,
+
+    lockTarget,
+    placeBet,
+    toggleCard,
+    submitHand,
+    requestNextRound,
+
+    toggleViewTable
+  };
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\game\useGameState.ts
+```
+// client/src/game/useGameState.ts
+import { useEffect, useMemo, useState } from "react";
+import { socket } from "../network/socketBridge";
+import { LocalStep } from "./localSteps";
+import type { GamePhase, PlayingCard, NumberCard } from "../../../shared/types";
+
+export type Overlay = "NONE" | "VIEW_TABLE";
+
+export interface GameState {
+  phase: GamePhase;
+  localStep: LocalStep;
+  overlay: Overlay;
+
+  roomId: string | null;
+  timer: number;
+
+  globalDeck: PlayingCard[];
+  myNumberHand: NumberCard[];
+
+  bios: number;
+  opponentBios: number;
+  pot: number;
+
+  selectedTargetId: string | null;
+  selectedCardIds: string[];
+
+  roundResult: any;
+  gameOver: any;
+
+  targetValue: number;
+  currentSum: number;
+}
+
+export const useGameState = () => {
+  const [phase, setPhase] = useState<GamePhase>("LOBBY");
+  const [localStep, setLocalStep] = useState<LocalStep>(LocalStep.PICK_TARGET);
+
+  const [overlay, setOverlay] = useState<Overlay>("NONE");
+
+  const [roomId, setRoomId] = useState<string | null>(null);
+
+  // --- TIMER SPLIT ---
+  const [serverTimer, setServerTimer] = useState(0);
+  const [displayTimer, setDisplayTimer] = useState(0);
+
+  const [globalDeck, setGlobalDeck] = useState<PlayingCard[]>([]);
+  const [myNumberHand, setMyNumberHand] = useState<NumberCard[]>([]);
+
+  const [bios, setBios] = useState(25);
+  const [opponentBios, setOpponentBios] = useState(25);
+  const [pot, setPot] = useState(0);
+
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
+
+  const [roundResult, setRoundResult] = useState<any>(null);
+  const [gameOver, setGameOver] = useState<any>(null);
+
+  /* -------------------------------------------------- */
+  /* ---------------- SOCKET EVENTS ------------------- */
+  /* -------------------------------------------------- */
+  useEffect(() => {
+    socket.on("room_created", ({ roomId }) => {
+      setRoomId(roomId);
+    });
+
+    socket.on("new_round_start", data => {
+      console.log("[CLIENT] New round started");
+
+      setPhase("GAME_LOOP");
+      setLocalStep(LocalStep.PICK_TARGET);
+
+      setGlobalDeck(data.globalDeck);
+      setMyNumberHand(data.numberHand);
+
+      setBios(data.bios);
+      setOpponentBios(data.opponentBios);
+      setPot(data.pot);
+
+      setServerTimer(data.timeRemaining);
+      setDisplayTimer(data.timeRemaining);
+
+      setSelectedTargetId(null);
+      setSelectedCardIds([]);
+
+      setRoundResult(null);
+    });
+
+    socket.on("timer_sync", time => {
+      setServerTimer(time);
+      setDisplayTimer(time);
+    });
+
+    socket.on("economy_update", data => {
+      setPot(data.pot);
+
+      const biosData = data.bios || {};
+      if (socket.id && biosData[socket.id] !== undefined) {
+        setBios(biosData[socket.id]);
+
+        const opId = Object.keys(biosData).find(id => id !== socket.id);
+        if (opId) setOpponentBios(biosData[opId]);
+      }
+    });
+
+    socket.on("round_result", data => {
+      console.log("[CLIENT] RAW round_result:", data.result);
+
+      const result = data.result || {};
+      const myId = socket.id!;
+      const [p1, p2] = Object.keys(result.hands);
+      const opponentId = myId === p1 ? p2 : p1;
+
+      // 🔑 Normalize outcome relative to ME
+      const myOutcome: "WIN" | "LOSE" | "DRAW" =
+        result.outcome === "DRAW"
+          ? "DRAW"
+          : (result.outcome === "WIN" && myId === p1) ||
+            (result.outcome === "LOSE" && myId === p2)
+          ? "WIN"
+          : "LOSE";
+
+      setRoundResult({
+        outcome: myOutcome,
+        playerHand: result.hands[myId],
+        opponentHand: result.hands[opponentId],
+        opponentTargets: result.targets ?? null
+      });
+
+      setPhase("RESOLUTION");
+
+      if (Array.isArray(data.updatedDeck)) {
+        setGlobalDeck(data.updatedDeck);
+      }
+
+      const biosData = data.updatedBios || {};
+      if (socket.id && biosData[socket.id] !== undefined) {
+        setBios(biosData[socket.id]);
+        setOpponentBios(biosData[opponentId]);
+      }
+
+      if (data.gameOver) {
+        setGameOver(data.gameOver);
+      }
+    });
+
+    return () => {
+      socket.removeAllListeners();
+    };
+  }, []);
+
+  /* -------------------------------------------------- */
+  /* ---------------- LOCAL TIMER --------------------- */
+  /* -------------------------------------------------- */
+  useEffect(() => {
+    if (phase !== "GAME_LOOP") return;
+
+    const interval = setInterval(() => {
+      setDisplayTimer(t => Math.max(0, t - 1));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  /* -------------------------------------------------- */
+  /* ---------------- DERIVED DATA -------------------- */
+  /* -------------------------------------------------- */
+  const targetValue = useMemo(() => {
+    return myNumberHand.find(n => n.id === selectedTargetId)?.value || 0;
+  }, [myNumberHand, selectedTargetId]);
+
+  const currentSum = useMemo(() => {
+    return selectedCardIds.reduce((sum, id) => {
+      const card = globalDeck.find(c => c.id === id);
+      return sum + (card?.value || 0);
+    }, 0);
+  }, [selectedCardIds, globalDeck]);
+
+  /* -------------------------------------------------- */
+  /* ---------------- OVERLAY CONTROL ----------------- */
+  /* -------------------------------------------------- */
+  const openTableView = () => setOverlay("VIEW_TABLE");
+  const closeTableView = () => setOverlay("NONE");
+
+  return {
+    state: {
+      phase,
+      localStep,
+      overlay,
+
+      roomId,
+      timer: displayTimer,
+
+      globalDeck,
+      myNumberHand,
+
+      bios,
+      opponentBios,
+      pot,
+
+      selectedTargetId,
+      selectedCardIds,
+
+      roundResult,
+      gameOver,
+
+      targetValue,
+      currentSum
+    },
+
+    setLocalStep,
+    setSelectedTargetId,
+    setSelectedCardIds,
+
+    openTableView,
+    closeTableView
+  };
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\client\src\network\socketBridge.ts
+```
+// client/src/network/socketBridge.ts
+import { io } from "socket.io-client";
+
+export const socket = io("http://localhost:3001", {
+  autoConnect: false
+});
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\index.ts
+```
+// server/src/index.ts
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { registerSocketHandlers } from "./sockets/handlers";
+
+const httpServer = createServer();
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*"
+  }
+});
+
+io.on("connection", socket => {
+  console.log(`[CONNECT] ${socket.id}`);
+  registerSocketHandlers(io, socket);
+});
+
+const PORT = 3001;
+httpServer.listen(PORT, () => {
+  console.log(`[SERVER] Air Poker running on port ${PORT}`);
+});
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\roomManager.ts
+```
+// server/src/roomManager.ts
+import { PlayingCard, NumberCard, GamePhase } from "../../shared/types";
+
+
+export interface PlayerState {
+  numberHand: NumberCard[];
+  bios: number;
+  currentBet: number;
+  targetLocked: boolean;
+  isSubmitted: boolean; 
+}
+
+export interface Room {
+  id: string;
+  players: string[];
+  phase: GamePhase; // Uses the shared type now
+  globalDeck: PlayingCard[];
+  pot: number;
+  mode: 'NORMAL' | 'HARD';
+  playerStates: Record<string, PlayerState>;
+  turnData: {
+    [playerId: string]: { targetId?: string; bet?: number; cardIds?: string[]; }
+  };
+  timerInterval?: NodeJS.Timeout; 
+}
+const rooms: Record<string, Room> = {};
+const playerDirectory: Record<string, { roomId: string; name: string }> = {};
+
+export const RoomManager = {
+  createRoom: (socketId: string, playerName: string): Room => {
+    const roomId = Math.random().toString(36).substring(2, 6).toUpperCase();
+    rooms[roomId] = {
+      id: roomId,
+      players: [socketId],
+      phase: 'LOBBY',
+      globalDeck: [],
+      pot: 0,
+      mode: 'NORMAL',
+      playerStates: {
+        [socketId]: { 
+            numberHand: [], bios: 25, currentBet: 0, 
+            targetLocked: false, isSubmitted: false 
+        }
+      },
+      turnData: {}
+    };
+    playerDirectory[socketId] = { roomId, name: playerName };
+    return rooms[roomId];
+  },
+
+  getRoom: (socketId: string): Room | undefined => {
+    const record = playerDirectory[socketId];
+    if (!record) return undefined;
+    return rooms[record.roomId];
+  },
+  
+  joinRoom: (socketId: string, roomId: string, name: string): Room | null => {
+    const room = rooms[roomId];
+    if (!room || room.players.length >= 2) return null;
+    
+    room.players.push(socketId);
+    room.playerStates[socketId] = { 
+        numberHand: [], bios: 25, currentBet: 0, 
+        targetLocked: false, isSubmitted: false 
+    };
+    playerDirectory[socketId] = { roomId, name };
+    return room;
+  },
+
+  removePlayer: (socketId: string) => {
+    const record = playerDirectory[socketId];
+    if (record) {
+      delete playerDirectory[socketId];
+      // Note: You might want to clean up the room object here if empty
+    }
+  }
+};
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\core\deck.ts
+```
+// server/src/core/deck.ts
+import { PlayingCard } from "../../../shared/types";
+
+/**
+ * Create a fresh 52-card deck.
+ * Burn state is tracked on each card.
+ */
+export const createDeck = (): PlayingCard[] => {
+  const suits: PlayingCard["suit"][] = ["♠", "♥", "♣", "♦"];
+  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
+  const deck: PlayingCard[] = [];
+
+  for (const suit of suits) {
+    ranks.forEach((rank, index) => {
+      deck.push({
+        id: `${suit}-${rank}`,
+        suit,
+        rank,
+        value: index + 1,
+        usedBy: null
+      });
+    });
+  }
+
+  return deck;
+};
+
+/**
+ * Safely resolve card IDs to actual cards.
+ * Missing or invalid IDs are silently ignored.
+ */
+export const resolveCards = (
+  deck: PlayingCard[],
+  ids: string[] | undefined
+): PlayingCard[] => {
+  if (!ids || ids.length === 0) return [];
+
+  return ids
+    .map(id => deck.find(card => card.id === id))
+    .filter(Boolean) as PlayingCard[];
+};
+
+/**
+ * Burn cards permanently.
+ * Burned cards are marked and never reset.
+ */
+export const burnCards = (
+  deck: PlayingCard[],
+  cardIds: string[],
+  reason = "BURNED"
+) => {
+  for (const id of cardIds) {
+    const card = deck.find(c => c.id === id);
+    if (card && card.usedBy === null) {
+      card.usedBy = reason;
+    }
+  }
+};
+
+/**
+ * Check if a card is already burned.
+ */
+export const isBurned = (deck: PlayingCard[], cardId: string): boolean => {
+  const card = deck.find(c => c.id === cardId);
+  return !!card && card.usedBy !== null;
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\core\roundController.ts
+```
+// server/src/core/roundController.ts
+import { Room } from "../state/roomStore";
+import { createDeck, burnCards } from "./deck";
+import { resolveRound } from "./rules";
+import { Server } from "socket.io";
+
+const ROUND_TIME_SEC = 60;
+
+/* ------------------------------------------------------------------ */
+/* ---------------------------- START ROUND ------------------------- */
+/* ------------------------------------------------------------------ */
+export const startRound = (room: Room, io: Server) => {
+  console.log(`[ROUND START] Room ${room.id}`);
+
+  room.phase = "GAME_LOOP";
+  room.turnData = {};
+  room.pot = 0;
+
+  // Initialize deck if first round
+  if (room.globalDeck.length === 0) {
+    console.log(`[DECK INIT] Creating new deck for room ${room.id}`);
+    room.globalDeck = createDeck();
+  }
+
+  // Clear any previous timer
+  if (room.timer) {
+    clearInterval(room.timer);
+    room.timer = undefined;
+  }
+
+  // Setup players
+  room.players.forEach(pid => {
+    const p = room.playerStates[pid];
+    p.isSubmitted = false;
+    p.targetLocked = false;
+
+    // New number hand every round
+    p.numberHand = generateNumberHand();
+
+    // Mandatory air drain
+    if (p.bios > 0) {
+      p.bios -= 1;
+      room.pot += 1;
+    } else {
+      console.warn(`[AIR WARNING] Player ${pid} started round with 0 bios`);
+    }
+  });
+
+  // Notify players individually
+  room.players.forEach(pid => {
+    const opponentId = room.players.find(p => p !== pid)!;
+    io.to(pid).emit("new_round_start", {
+      globalDeck: room.globalDeck,
+      numberHand: room.playerStates[pid].numberHand,
+      bios: room.playerStates[pid].bios,
+      opponentBios: room.playerStates[opponentId].bios,
+      pot: room.pot,
+      timeRemaining: ROUND_TIME_SEC
+    });
+  });
+
+  startTimer(room, io);
+};
+
+/* ------------------------------------------------------------------ */
+/* ---------------------------- TIMER -------------------------------- */
+/* ------------------------------------------------------------------ */
+const startTimer = (room: Room, io: Server) => {
+  let timeLeft = ROUND_TIME_SEC;
+  console.log(`[TIMER] Room ${room.id} started (${ROUND_TIME_SEC}s)`);
+
+  room.timer = setInterval(() => {
+    timeLeft--;
+
+    if (timeLeft % 10 === 0) {
+      io.to(room.id).emit("timer_sync", timeLeft);
+      console.log(`[TIMER] Room ${room.id}: ${timeLeft}s left`);
+    }
+
+    if (timeLeft <= 0) {
+      console.warn(`[TIMEOUT] Room ${room.id} forcing resolution`);
+      clearInterval(room.timer!);
+      room.timer = undefined;
+      endRound(room, io, "TIMEOUT");
+    }
+  }, 1000);
+};
+
+/* ------------------------------------------------------------------ */
+/* -------------------------- RESOLUTION ----------------------------- */
+/* ------------------------------------------------------------------ */
+export const endRound = (
+  room: Room,
+  io: Server,
+  reason: "NORMAL" | "TIMEOUT"
+) => {
+  if (room.players.length < 2) {
+    console.warn(`[ABORT END] Room ${room.id} has insufficient players`);
+    if (room.timer) {
+      clearInterval(room.timer);
+      room.timer = undefined;
+    }
+    room.phase = "LOBBY";
+    return;
+  }
+
+  if (room.phase !== "GAME_LOOP") {
+    console.error(`[INVALID END] Attempted to resolve room ${room.id} outside GAME_LOOP`);
+    return;
+  }
+
+  console.log(`[ROUND END] Room ${room.id} resolving (${reason})`);
+
+  if (room.timer) {
+    clearInterval(room.timer);
+    room.timer = undefined;
+  }
+
+  room.phase = "RESOLUTION";
+
+  const activePlayers = room.players.filter(pid => room.playerStates[pid]);
+  if (activePlayers.length < 2) {
+    console.warn(`[INVALID RESOLUTION] Room ${room.id} missing player state`);
+    return;
+  }
+
+  const [p1, p2] = activePlayers;
+
+  // Resolve the round using number hands & turn data
+  const result = resolveRound(
+    [p1, p2],
+    room.turnData,
+    {
+      [p1]: room.playerStates[p1].numberHand,
+      [p2]: room.playerStates[p2].numberHand
+    },
+    room.globalDeck
+  );
+
+  console.log(`[RESOLUTION] Room ${room.id}:`, JSON.stringify(result));
+
+  // Derive winner locally from outcome
+  const winner =
+    result.outcome === "WIN" ? p1 :
+    result.outcome === "LOSE" ? p2 :
+    null;
+
+  // Apply pot
+  if (winner) {
+    room.playerStates[winner].bios += room.pot;
+    console.log(`[PAYOUT] Player ${winner} wins ${room.pot} bios`);
+  } else {
+    console.log(`[DRAW] Pot discarded`);
+  }
+
+  // Burn all submitted cards
+  const allCardIds = [
+    ...(room.turnData[p1]?.cardIds || []),
+    ...(room.turnData[p2]?.cardIds || [])
+  ];
+  if (allCardIds.length > 0) {
+    burnCards(room.globalDeck, allCardIds);
+    console.log(`[BURN] Room ${room.id} burned ${allCardIds.length} cards`);
+  }
+
+  // Bankruptcy check
+  let gameOver = null;
+  if (room.playerStates[p1].bios <= 0) {
+    gameOver = { winner: p2, reason: "Bankruptcy" };
+  } else if (room.playerStates[p2].bios <= 0) {
+    gameOver = { winner: p1, reason: "Bankruptcy" };
+  }
+  if (gameOver) {
+    console.warn(`[GAME OVER] Room ${room.id}:`, JSON.stringify(gameOver));
+  }
+
+  // Emit round result to all players
+  io.to(room.id).emit("round_result", {
+    result, // contains outcome & hands
+    updatedDeck: room.globalDeck,
+    updatedBios: {
+      [p1]: room.playerStates[p1].bios,
+      [p2]: room.playerStates[p2].bios
+    },
+    opponentTargets: {
+      [p1]: room.playerStates[p1].numberHand.find(
+        n => n.id === room.turnData[p1]?.targetId
+      )?.value || 0,
+      [p2]: room.playerStates[p2].numberHand.find(
+        n => n.id === room.turnData[p2]?.targetId
+      )?.value || 0
+    },
+    gameOver
+  });
+};
+
+/* ------------------------------------------------------------------ */
+/* --------------------- NUMBER HAND FACTORY ------------------------- */
+/* ------------------------------------------------------------------ */
+const generateNumberHand = () => {
+  const hand = [];
+  for (let i = 0; i < 5; i++) {
+    const value = Math.floor(Math.random() * (55 - 15 + 1)) + 15;
+    hand.push({
+      id: `num-${Math.random().toString(36).slice(2, 8)}`,
+      value,
+      isUsed: false
+    });
+  }
+  return hand;
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\core\rules.ts
+```
+// server/src/core/rules.ts
+import { PlayingCard, NumberCard } from "../../../shared/types";
+import { Hand } from "pokersolver";
+import { resolveCards } from "./deck";
+
+/* ------------------------------------------------------------------ */
+/* --------------------------- TYPES -------------------------------- */
+/* ------------------------------------------------------------------ */
+
+export interface PlayerSubmission {
+  targetId?: string;
+  cardIds?: string[];
+}
+
+export interface ResolvedHand {
+  name: string;       // e.g. "Straight Flush"
+  strength: number;   // pokersolver rank (lower = stronger)
+}
+
+export interface ResolutionResult {
+  outcome: "WIN" | "LOSE" | "DRAW";
+  hands: {
+    [playerId: string]: ResolvedHand;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* ----------------------- MAIN RESOLUTION --------------------------- */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve a round between two players.
+ * PURE FUNCTION — no mutation, no sockets, no side effects.
+ */
+export const resolveRound = (
+  playerIds: [string, string],
+  submissions: Record<string, PlayerSubmission>,
+  numberHands: Record<string, NumberCard[]>,
+  deck: PlayingCard[]
+): ResolutionResult => {
+  const [p1, p2] = playerIds;
+
+  const r1 = evaluatePlayer(p1, submissions[p1], numberHands[p1], deck);
+  const r2 = evaluatePlayer(p2, submissions[p2], numberHands[p2], deck);
+
+  /* ---------------- INVALID / TIMEOUT CASES ---------------- */
+
+  // both failed
+  if (!r1.valid && !r2.valid) {
+    return {
+      outcome: "DRAW",
+      hands: {}
+    };
+  }
+
+  // p1 failed
+  if (!r1.valid) {
+    const h2 = Hand.solve(r2.cards.map(toSolverFormat));
+    return {
+      outcome: "LOSE",
+      hands: {
+        [p2]: {
+          name: h2.descr,
+          strength: h2.rank
+        }
+      }
+    };
+  }
+
+  // p2 failed
+  if (!r2.valid) {
+    const h1 = Hand.solve(r1.cards.map(toSolverFormat));
+    return {
+      outcome: "WIN",
+      hands: {
+        [p1]: {
+          name: h1.descr,
+          strength: h1.rank
+        }
+      }
+    };
+  }
+
+  /* ---------------- BOTH VALID: POKER COMPARISON ---------------- */
+
+  const h1 = Hand.solve(r1.cards.map(toSolverFormat));
+  const h2 = Hand.solve(r2.cards.map(toSolverFormat));
+
+  const winners = Hand.winners([h1, h2]);
+
+  let outcome: "WIN" | "LOSE" | "DRAW" = "DRAW";
+
+  if (winners.length === 1) {
+    outcome = winners[0] === h1 ? "WIN" : "LOSE";
+  }
+
+  return {
+    outcome,
+    hands: {
+      [p1]: {
+        name: h1.descr,
+        strength: h1.rank
+      },
+      [p2]: {
+        name: h2.descr,
+        strength: h2.rank
+      }
+    }
+  };
+};
+
+/* ------------------------------------------------------------------ */
+/* -------------------------- HELPERS -------------------------------- */
+/* ------------------------------------------------------------------ */
+
+const evaluatePlayer = (
+  _playerId: string,
+  submission: PlayerSubmission | undefined,
+  numberHand: NumberCard[],
+  deck: PlayingCard[]
+): { valid: boolean; cards: PlayingCard[] } => {
+  if (!submission || !submission.cardIds || submission.cardIds.length !== 5) {
+    return { valid: false, cards: [] };
+  }
+
+  const targetValue = numberHand.find(
+    n => n.id === submission.targetId
+  )?.value;
+
+  if (targetValue === undefined) {
+    return { valid: false, cards: [] };
+  }
+
+  const cards = resolveCards(deck, submission.cardIds);
+  if (cards.length !== 5) {
+    return { valid: false, cards: [] };
+  }
+
+  const sum = cards.reduce((s, c) => s + c.value, 0);
+  if (sum !== targetValue) {
+    return { valid: false, cards };
+  }
+
+  return { valid: true, cards };
+};
+
+const toSolverFormat = (card: PlayingCard): string => {
+  const rank = card.rank === "10" ? "T" : card.rank;
+  const suit =
+    card.suit === "♠" ? "s" :
+    card.suit === "♥" ? "h" :
+    card.suit === "♣" ? "c" : "d";
+
+  return rank + suit;
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\sockets\handlers.ts
+```
+// server/src/sockets/handlers.ts
+import { Server, Socket } from "socket.io";
+import { RoomStore } from "../state/roomStore";
+import { startRound, endRound } from "../core/roundController";
+
+export const registerSocketHandlers = (io: Server, socket: Socket) => {
+  const logPrefix = `[SOCKET ${socket.id}]`;
+
+  /* -------------------------------------------------- */
+  /* ------------------ ROOM FLOW --------------------- */
+  /* -------------------------------------------------- */
+
+  socket.on("create_room", () => {
+    const room = RoomStore.createRoom(socket.id);
+    socket.join(room.id);
+    console.log(`${logPrefix} Created room ${room.id}`);
+    socket.emit("room_created", { roomId: room.id });
+  });
+
+  socket.on("join_room", ({ roomId }) => {
+    const room = RoomStore.joinRoom(socket.id, roomId);
+    if (!room) {
+      console.warn(`${logPrefix} Failed to join room ${roomId}`);
+      return;
+    }
+
+    socket.join(room.id);
+    console.log(`${logPrefix} Joined room ${room.id}`);
+
+    if (room.players.length === 2) {
+      console.log(`[ROOM ${room.id}] Two players ready. Starting round.`);
+      startRound(room, io);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.warn(`${logPrefix} Disconnected`);
+    RoomStore.removePlayer(socket.id);
+  });
+
+  /* -------------------------------------------------- */
+  /* ------------------ GAME ACTIONS ------------------ */
+  /* -------------------------------------------------- */
+
+  socket.on("action_target", ({ targetId }) => {
+    const room = RoomStore.getRoomByPlayer(socket.id);
+    if (!room) {
+      console.warn(`${logPrefix} action_target with no room`);
+      return;
+    }
+
+    if (room.phase !== "GAME_LOOP") {
+      console.warn(
+        `${logPrefix} action_target ignored (phase=${room.phase})`
+      );
+      return;
+    }
+
+    const player = room.playerStates[socket.id];
+    if (player.targetLocked) {
+      console.warn(`${logPrefix} Duplicate target lock ignored`);
+      return;
+    }
+
+    room.turnData[socket.id] = { targetId };
+    player.targetLocked = true;
+
+    console.log(`${logPrefix} Locked target ${targetId}`);
+  });
+
+  socket.on("action_bet", ({ amount }) => {
+    const room = RoomStore.getRoomByPlayer(socket.id);
+    if (!room) {
+      console.warn(`${logPrefix} action_bet with no room`);
+      return;
+    }
+
+    if (room.phase !== "GAME_LOOP") {
+      console.warn(`${logPrefix} action_bet ignored (phase=${room.phase})`);
+      return;
+    }
+
+    const player = room.playerStates[socket.id];
+
+    if (!player.targetLocked) {
+      console.warn(
+        `${logPrefix} action_bet before target lock ignored`
+      );
+      return;
+    }
+
+    if (amount < 0 || player.bios < amount) {
+      console.warn(
+        `${logPrefix} Invalid bet amount ${amount} (bios=${player.bios})`
+      );
+      return;
+    }
+
+    player.bios -= amount;
+    room.pot += amount;
+
+    console.log(`${logPrefix} Bet ${amount} bios`);
+
+    io.to(room.id).emit("economy_update", {
+      pot: room.pot,
+      bios: { [socket.id]: player.bios }
+    });
+  });
+
+  socket.on("action_submit", ({ cardIds }) => {
+    const room = RoomStore.getRoomByPlayer(socket.id);
+    if (!room) {
+      console.warn(`${logPrefix} action_submit with no room`);
+      return;
+    }
+
+    if (room.phase !== "GAME_LOOP") {
+      console.warn(
+        `${logPrefix} action_submit ignored (phase=${room.phase})`
+      );
+      return;
+    }
+
+    const player = room.playerStates[socket.id];
+
+    if (!player.targetLocked) {
+      console.warn(
+        `${logPrefix} action_submit before target lock ignored`
+      );
+      return;
+    }
+
+    if (player.isSubmitted) {
+      console.warn(`${logPrefix} Duplicate submission ignored`);
+      return;
+    }
+
+    room.turnData[socket.id] = {
+      ...room.turnData[socket.id],
+      cardIds
+    };
+
+    player.isSubmitted = true;
+
+    console.log(
+      `${logPrefix} Submitted hand (${cardIds?.length || 0} cards)`
+    );
+
+    // If all players submitted, resolve immediately
+    const allSubmitted = room.players.every(
+      pid => room.playerStates[pid].isSubmitted
+    );
+
+    if (allSubmitted) {
+      console.log(`[ROOM ${room.id}] All players submitted. Resolving.`);
+      endRound(room, io, "NORMAL");
+    }
+  });
+
+  socket.on("next_round_request", () => {
+    const room = RoomStore.getRoomByPlayer(socket.id);
+    if (!room) {
+      console.warn(`${logPrefix} next_round_request with no room`);
+      return;
+    }
+
+    if (room.phase !== "RESOLUTION") {
+      console.warn(
+        `${logPrefix} next_round_request ignored (phase=${room.phase})`
+      );
+      return;
+    }
+
+    console.log(`[ROOM ${room.id}] Next round requested`);
+    startRound(room, io);
+  });
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\server\src\state\roomStore.ts
+```
+// server/src/state/roomStore.ts
+import { PlayingCard, NumberCard, GamePhase } from "../../../shared/types";
+
+export interface PlayerState {
+  bios: number;
+  numberHand: NumberCard[];
+  targetLocked: boolean;
+  isSubmitted: boolean;
+}
+
+export interface TurnData {
+  targetId?: string;
+  cardIds?: string[];
+}
+
+export interface Room {
+  id: string;
+  players: string[];
+  phase: GamePhase;
+
+  globalDeck: PlayingCard[];
+  pot: number;
+
+  playerStates: Record<string, PlayerState>;
+  turnData: Record<string, TurnData>;
+
+  timer?: NodeJS.Timeout;
+}
+
+const rooms: Record<string, Room> = {};
+const playerToRoom: Record<string, string> = {};
+
+export const RoomStore = {
+  createRoom(socketId: string): Room {
+    const roomId = Math.random().toString(36).slice(2, 6).toUpperCase();
+
+    const room: Room = {
+      id: roomId,
+      players: [socketId],
+      phase: "LOBBY",
+      globalDeck: [],
+      pot: 0,
+      playerStates: {
+        [socketId]: {
+          bios: 25,
+          numberHand: [],
+          targetLocked: false,
+          isSubmitted: false
+        }
+      },
+      turnData: {}
+    };
+
+    rooms[roomId] = room;
+    playerToRoom[socketId] = roomId;
+    return room;
+  },
+
+  joinRoom(socketId: string, roomId: string): Room | null {
+    const room = rooms[roomId];
+    if (!room || room.players.length >= 2) return null;
+
+    room.players.push(socketId);
+    room.playerStates[socketId] = {
+      bios: 25,
+      numberHand: [],
+      targetLocked: false,
+      isSubmitted: false
+    };
+
+    playerToRoom[socketId] = roomId;
+    return room;
+  },
+
+  getRoomByPlayer(socketId: string): Room | null {
+    const roomId = playerToRoom[socketId];
+    return roomId ? rooms[roomId] : null;
+  },
+
+  removePlayer(socketId: string) {
+    const roomId = playerToRoom[socketId];
+    if (!roomId) return;
+
+    delete playerToRoom[socketId];
+
+    const room = rooms[roomId];
+    if (!room) return;
+
+    room.players = room.players.filter(p => p !== socketId);
+    delete room.playerStates[socketId];
+    delete room.turnData[socketId];
+
+    if (room.players.length === 0) {
+      delete rooms[roomId];
+    }
+  }
+};
+
+```
+
+c:\Users\punnu\Desktop\AirPoker\shared\types.ts
+```
+// shared/types.ts
+
+export type SuitSymbol = "♠" | "♥" | "♣" | "♦";
+
+export interface PlayingCard {
+  id: string;
+  suit: SuitSymbol;
+  rank: string;
+  value: number;
+  usedBy: string | null;
+}
+
+export type GamePhase =
+  | "LOBBY"
+  | "GAME_LOOP"
+  | "RESOLUTION"
+  | "GAME_OVER";
+
+export interface NumberCard {
+  id: string;
+  value: number;
+  isUsed: boolean;
+}
+
+
+```
+

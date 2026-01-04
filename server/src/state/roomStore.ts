@@ -17,6 +17,7 @@ export interface Room {
   id: string;
   players: string[];
   phase: GamePhase;
+  roundCount: number;
 
   globalDeck: PlayingCard[];
   pot: number;
@@ -38,6 +39,7 @@ export const RoomStore = {
       id: roomId,
       players: [socketId],
       phase: "LOBBY",
+      roundCount: 0,
       globalDeck: [],
       pot: 0,
       playerStates: {

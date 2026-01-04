@@ -66,7 +66,14 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
     player.targetLocked = true;
 
     console.log(`${logPrefix} Locked target ${targetId}`);
+
+    // ✅ NEW: Broadcast readiness so OTHER client updates visuals
+    io.to(room.id).emit("player_status_update", {
+      playerId: socket.id,
+      status: "TARGET_LOCKED"
+    });
   });
+
 
   socket.on("action_bet", ({ amount }) => {
     const room = RoomStore.getRoomByPlayer(socket.id);

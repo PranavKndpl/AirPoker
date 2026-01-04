@@ -44,17 +44,27 @@ export const useGameActions = ({
   };
 
   /* -------------------------------------------------- */
-  /* ---------------- GAME FLOW ----------------------- */
+  /* ---------------- TARGET SELECTION ---------------- */
   /* -------------------------------------------------- */
 
-  const lockTarget = (targetId: string) => {
-    if (!canTransition(localStep, LocalStep.BETTING)) return;
-
+  // NEW: Highlight only (no server interaction)
+  const selectTarget = (targetId: string) => {
+    if (localStep !== LocalStep.PICK_TARGET) return;
     setSelectedTargetId(targetId);
-    setLocalStep(LocalStep.BETTING);
-
-    socket.emit("action_target", { targetId });
   };
+
+  // NEW: Explicit confirmation
+  const confirmTarget = () => {
+    if (!canTransition(localStep, LocalStep.BETTING)) return;
+    if (!selectedTargetId) return;
+
+    setLocalStep(LocalStep.BETTING);
+    socket.emit("action_target", { targetId: selectedTargetId });
+  };
+
+  /* -------------------------------------------------- */
+  /* ---------------- GAME FLOW ----------------------- */
+  /* -------------------------------------------------- */
 
   const placeBet = (amount: number) => {
     if (!canTransition(localStep, LocalStep.PICK_HAND)) return;
@@ -102,7 +112,10 @@ export const useGameActions = ({
     createRoom,
     joinRoom,
 
-    lockTarget,
+    // 🔑 NEW FLOW
+    selectTarget,
+    confirmTarget,
+
     placeBet,
     toggleCard,
     submitHand,

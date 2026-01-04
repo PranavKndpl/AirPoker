@@ -15,6 +15,7 @@ export interface PlayerSubmission {
 export interface ResolvedHand {
   name: string;       // e.g. "Straight Flush"
   strength: number;   // pokersolver rank (lower = stronger)
+  cards?: PlayingCard[];
 }
 
 export interface ResolutionResult {
@@ -99,11 +100,13 @@ export const resolveRound = (
     hands: {
       [p1]: {
         name: h1.descr,
-        strength: h1.rank
+        strength: h1.rank,
+        cards: r1.cards
       },
       [p2]: {
         name: h2.descr,
-        strength: h2.rank
+        strength: h2.rank,
+        cards: r2.cards
       }
     }
   };

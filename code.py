@@ -11,12 +11,12 @@ def find_matching_folders(root_dir, target_names):
     matches = []
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
-        # Modify dirnames in-place to skip excluded directories
+        # Skip excluded directories
         dirnames[:] = [d for d in dirnames if d not in EXCLUDE_DIRS]
 
-        for dirname in dirnames:
-            if dirname in target_names:
-                matches.append(os.path.join(dirpath, dirname))
+        # Check if the current directory itself is a target
+        if os.path.basename(dirpath) in target_names:
+            matches.append(dirpath)
 
     return matches
 
