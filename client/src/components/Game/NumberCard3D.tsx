@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react'; 
 import { useSpring, animated } from '@react-spring/three';
 import { useTexture, Text } from '@react-three/drei';
+import { useThree } from '@react-three/fiber'; 
+import * as THREE from 'three';
 
 interface NumberCardProps {
   value: number;
@@ -16,11 +18,29 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
   value, position, isSelected, isUsed, onClick 
 }) => {
   const [hovered, setHover] = useState(false);
+  const { gl } = useThree(); // 👈 Access the renderer
   
   // Textures
   const frontTexture = useTexture('/card_front.png');
   const backTexture = useTexture('/card_back.png');
 
+  // ⚡️ HD TEXTURE SETTINGS ⚡️
+  // We force the texture to stay sharp at extreme angles
+  useEffect(() => {
+    const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
+    
+    frontTexture.anisotropy = maxAnisotropy;
+    frontTexture.magFilter = THREE.LinearFilter;
+    frontTexture.minFilter = THREE.LinearMipMapLinearFilter;
+    frontTexture.needsUpdate = true;
+
+    backTexture.anisotropy = maxAnisotropy;
+    backTexture.magFilter = THREE.LinearFilter;
+    backTexture.minFilter = THREE.LinearMipMapLinearFilter;
+    backTexture.needsUpdate = true;
+  }, [frontTexture, backTexture, gl]);
+
+  // Texture settings
   frontTexture.flipY = false;
   backTexture.flipY = false;
   frontTexture.colorSpace = "srgb";
@@ -29,6 +49,7 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
   const [isRevealing, setRevealing] = useState(false);
   const prevValue = useRef(value);
 
+  // ... (Keep existing reveal/useEffect logic) ...
   useEffect(() => {
     if (prevValue.current === 0 && value > 0) {
       setRevealing(true);
@@ -39,9 +60,7 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
   }, [value]);
 
   const showBack = value === 0; 
-  
-  // ✅ FIX 1: Updated Local Font Path
-  const fontUrl = "/Cinzel/static/Cinzel-Regular.ttf"; 
+  const fontUrl = "/Cinzel/static/Cinzel-Regular.ttf";
 
   const { pos, rot, scale } = useSpring({
     pos: isRevealing 
@@ -76,7 +95,8 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
         onPointerOver={() => !isUsed && setHover(true)}
         onPointerOut={() => setHover(false)}
       >
-        <boxGeometry args={[1.4, 2.0, 0.05]} />
+        {/* ⚡️ SIZE INCREASE: Was [1.4, 2.0, 0.05] -> Now [1.6, 2.3, 0.06] */}
+        <boxGeometry args={[1.6, 2.3, 0.06]} />
         
         {/* SIDES */}
         <meshStandardMaterial attach="material-0" color="#ceb064" metalness={1.0} roughness={0.2} />
@@ -90,34 +110,34 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
           map={frontTexture} 
           color="#ffffff" 
           metalness={0.1} 
-          roughness={0.8}
+          roughness={0.5} // Lower roughness makes it slightly glossier/sharper
         />
         
-        {/* ✅ FIX 2: CHANGED TO STANDARD MATERIAL 
-            This allows it to be dark (affected by lights) instead of glowing white. 
-        */}
+        {/* BACK (Glowing) */}
         <meshStandardMaterial 
             attach="material-5" 
             map={backTexture} 
-            color="#bbbbbb" // Slightly dim the white texture
+            color="#ffffff"
+            emissiveMap={backTexture}
+            emissive="#555555"
+            emissiveIntensity={0.8}
             metalness={0.1}
-            roughness={0.8}
+            roughness={0.5}
         />
       </mesh>
 
-      {/* TEXT */}
+      {/* TEXT - Adjusted position for larger card */}
       {!showBack && (
-        <group position={[0, 0, 0.04]}> 
+        <group position={[0, 0, 0.05]}> 
            <Text
              font={fontUrl}       
-             fontSize={0.55}      
-             color="#2a1a0a"
+             fontSize={0.65} // Larger font for larger card      
+             color="#ffd700"
              anchorX="center"
              anchorY="middle"
              outlineWidth={0.02}
-             outlineColor="#8a6d3b"
-             position={[0, 0, 0]}   
-             fillOpacity={0.9}
+             outlineColor="#4a3b1b"
+             material-toneMapped={false}
            >
              {value}
            </Text>
