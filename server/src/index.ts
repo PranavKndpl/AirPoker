@@ -3,20 +3,25 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { registerSocketHandlers } from "./sockets/handlers";
 
-const httpServer = createServer();
+const PORT = process.env.PORT || 3001; 
+
+const httpServer = createServer(); 
 
 const io = new Server(httpServer, {
   cors: {
-    origin: "*"
+    origin: "*", 
+    methods: ["GET", "POST"]
   }
 });
 
-io.on("connection", socket => {
-  console.log(`[CONNECT] ${socket.id}`);
+// ⚠️ FIX: Listen for connection, THEN register handlers for that specific socket
+io.on("connection", (socket) => {
+  console.log(`User connected: ${socket.id}`);
+  
+  // Now we pass both 'io' (for global broadcasts) and 'socket' (for specific user)
   registerSocketHandlers(io, socket);
 });
 
-const PORT = 3001;
 httpServer.listen(PORT, () => {
   console.log(`[SERVER] Air Poker running on port ${PORT}`);
 });

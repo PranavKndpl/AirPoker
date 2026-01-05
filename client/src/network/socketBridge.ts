@@ -1,6 +1,9 @@
 // client/src/network/socketBridge.ts
-import { io } from "socket.io-client";
+import { io } from 'socket.io-client';
 
-export const socket = io("http://localhost:3001", {
-  autoConnect: false
+// Use an Environment Variable
+const URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
+
+export const socket = io(URL, {
+  transports: ['websocket'],
 });
