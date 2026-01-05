@@ -1,4 +1,6 @@
+// client/src/components/UI/GameHUD.tsx
 import React from "react";
+import { OxygenTank } from "./OxygenTank"; // 👈 IMPORT THIS
 
 interface GameHUDProps {
   roomId: string | null;
@@ -9,7 +11,7 @@ interface GameHUDProps {
   phase: string;
   myWins?: number;
   opponentWins?: number;
-  oxygenProgress: number; // 0 to 60
+  oxygenProgress: number; // 0 to 60 (Decay count)
 }
 
 export const GameHUD: React.FC<GameHUDProps> = ({ 
@@ -23,9 +25,11 @@ export const GameHUD: React.FC<GameHUDProps> = ({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Oxygen Calculation
-  const pct = (oxygenProgress / 60) * 100;
-  const isCritical = pct > 85;
+  // Logic: oxygenProgress is how much has DECAYED (0 -> 60).
+  // We want the bar to show how much is LEFT (100% -> 0%).
+  const decayedPct = (oxygenProgress / 60) * 100;
+  const remainingPct = 100 - decayedPct;
+  const isCritical = remainingPct < 15; // Red Alert below 15%
 
   return (
     <div style={hudContainerStyle}>
@@ -44,34 +48,22 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {formatTime(timer)}
         </div>
 
-        {/* 🫁 OXYGEN BAR (New Location) */}
-        <div style={{marginTop: 10, display: 'flex', alignItems: 'center', gap: 10}}>
+        {/* 🫁 THE NEW TANK UI */}
+        <div style={{marginTop: 15, display: 'flex', alignItems: 'center', gap: 15}}>
            
            {/* Lungs Icon (Pulse Animation) */}
            <div style={{
-              fontSize: '1.5rem', 
+              fontSize: '2rem', 
               animation: isCritical ? 'gasp 0.5s infinite alternate' : 'breathe 3s infinite ease-in-out',
-              opacity: isCritical ? 1 : 0.7,
-              filter: isCritical ? 'drop-shadow(0 0 5px #ff0000)' : 'none'
+              opacity: isCritical ? 1 : 0.8,
+              filter: isCritical ? 'drop-shadow(0 0 8px #ff0000)' : 'drop-shadow(0 0 5px #00f0ff)'
            }}>
               🫁
            </div>
 
-           {/* The Bar */}
-           <div style={{flex: 1, minWidth: 120}}>
-              <div style={{
-                 width: '100%', height: 8, background: '#222', 
-                 borderRadius: 4, overflow: 'hidden', border: '1px solid #444'
-              }}>
-                 <div style={{
-                    width: `${100 - pct}%`, // Depletes from 100% to 0%
-                    height: '100%',
-                    background: isCritical ? '#ff4444' : 'linear-gradient(90deg, #00ff88, #00aa55)',
-                    transition: 'width 1s linear',
-                    boxShadow: isCritical ? '0 0 10px #ff0000' : 'none'
-                 }} />
-              </div>
-           </div>
+           {/* ⚡️ THE LIQUID TANK ⚡️ */}
+           <OxygenTank percentage={remainingPct} isCritical={isCritical} />
+           
         </div>
 
       </div>
@@ -93,16 +85,16 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         <div style={bioStyle}>OPP: <span style={{color: '#aaa'}}>{opponentBios}</span></div>
       </div>
 
-      {/* Inject Keyframes for Breathing */}
+      {/* Keyframes */}
       <style>{`
         @keyframes breathe {
-          0% { transform: scale(1); opacity: 0.7; }
+          0% { transform: scale(1); opacity: 0.8; }
           50% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(1); opacity: 0.7; }
+          100% { transform: scale(1); opacity: 0.8; }
         }
         @keyframes gasp {
-          0% { transform: scale(0.9); }
-          100% { transform: scale(1.2); }
+          0% { transform: scale(0.9); filter: grayscale(1); }
+          100% { transform: scale(1.2); filter: grayscale(0); }
         }
       `}</style>
 
@@ -117,38 +109,30 @@ const hudContainerStyle: React.CSSProperties = {
   display: "flex", justifyContent: "space-between", alignItems: "flex-start",
   pointerEvents: "none", zIndex: 10
 };
-
 const leftSectionStyle: React.CSSProperties = { 
   pointerEvents: "none", textAlign: "left", display: 'flex', flexDirection: 'column' 
 };
-
 const rightSectionStyle: React.CSSProperties = { 
   textAlign: "right", pointerEvents: "none" 
 };
-
 const centerScoreStyle: React.CSSProperties = {
   position: 'absolute', left: '50%', top: 20, transform: 'translateX(-50%)',
   textAlign: 'center'
 };
-
 const titleStyle: React.CSSProperties = { 
   margin: 0, fontSize: "1.8rem", color: "#ffd700", textShadow: "0 0 10px #eebb00", 
   fontFamily: 'sans-serif', fontWeight: 900, letterSpacing: -1
 };
-
 const timerStyle: React.CSSProperties = { 
   fontSize: "2.5rem", fontWeight: "bold", color: "#fff", lineHeight: 1, letterSpacing: 2
 };
-
 const scoreBoxStyle: React.CSSProperties = {
   background: 'rgba(0,0,0,0.8)', padding: '10px 30px', borderRadius: 12, 
   border: '1px solid #333', boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
 };
-
 const potStyle: React.CSSProperties = { 
   fontSize: "1.8rem", fontWeight: "bold", color: "#ffd700", marginBottom: 5, textShadow: '0 0 10px rgba(255, 215, 0, 0.3)'
 };
-
 const bioStyle: React.CSSProperties = { 
   fontSize: "1.1rem", color: "#888", fontWeight: "bold", letterSpacing: 1
 };

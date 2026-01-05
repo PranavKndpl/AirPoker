@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 type PlayingCard = { id: string; suit: string; rank: string; value: number; usedBy: string | null };
 
@@ -12,145 +12,157 @@ interface GridProps {
   targetValue: number;
 }
 
+// RANK ORDER CONSTANTS
+const RANK_ORDER = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K',];
+const SUIT_ORDER = ['♠', '♥', '♣', '♦'];
+
 export const SelectionGrid: React.FC<GridProps> = ({ deck, selectedIds, onToggle, onConfirm, onClose, currentSum, targetValue }) => {
+  
+  // SORTING LOGIC: Organize by Suit (Rows) and Rank (Cols)
+  const sortedDeck = useMemo(() => {
+    return [...deck].sort((a, b) => {
+      const suitDiff = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+      if (suitDiff !== 0) return suitDiff;
+      return RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank);
+    });
+  }, [deck]);
+
   return (
     <div style={{
-      position: 'fixed',
-      bottom: 20,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 20,
-      pointerEvents: 'auto'
+      position: 'fixed', inset: 0, zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)',
+      animation: 'fadeIn 0.3s ease-out',
+      padding: 20 // Ensure edge spacing
     }}>
       
-      {/* THE PANEL CONTAINER */}
+      {/* THE PANEL */}
       <div style={{
-        pointerEvents: 'auto',
-        background: 'rgba(5, 5, 5, 0.96)', // Darker, cleaner background
-        border: '1px solid #444',
-        borderRadius: 16,
-        boxShadow: '0 0 80px rgba(0,0,0,1)', // Massive shadow for depth
-        width: '90%',
-        maxWidth: '1200px',
-        aspectRatio: '16/9', // Force a cinematic wide ratio
-        maxHeight: '90vh',
-        display: 'flex', flexDirection: 'column',
         position: 'relative',
-        padding: 20
+        width: '95%', 
+        maxWidth: '1400px',
+        maxHeight: '95vh', // 🛑 HARD LIMIT: Never exceed 95% of screen height
+        display: 'flex', flexDirection: 'column',
+        background: 'rgba(12, 20, 28, 0.95)',
+        border: '1px solid rgba(0, 240, 255, 0.3)',
+        borderRadius: 12,
+        boxShadow: '0 0 50px rgba(0, 0, 0, 0.8)',
+        overflow: 'hidden', // Contain the scrollbar inside
+        animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
       }}>
 
-        {/* --- CLOSE BUTTON (Fixed Z-Index) --- */}
-        <button 
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: -15, right: -15, // Floating slightly outside/corner
-            width: 40, height: 40,
-            background: '#ff3333',
-            color: 'white',
-            border: '2px solid white',
-            borderRadius: '50%',
-            fontSize: '1.2rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            zIndex: 100, // Highest Priority
-            boxShadow: '0 0 10px #ff0000',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}
-          title="Cancel Selection"
-        >
-          ✕
-        </button>
-
-        {/* --- THE 52 CARD GRID (Perfect Fit) --- */}
+        {/* --- HEADER --- */}
         <div style={{
-          flex: 1,
-          display: 'grid',
-          // 13 Columns (Ranks), 4 Rows (Suits)
-          gridTemplateColumns: 'repeat(13, 1fr)',
-          gridTemplateRows: 'repeat(4, 1fr)', 
-          gap: '0.5vw', // Responsive gap
-          paddingBottom: 20
+          padding: '15px 25px',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'linear-gradient(90deg, rgba(0,240,255,0.1), transparent)',
+          flexShrink: 0 // Prevent header from shrinking
         }}>
-          {deck.map(card => {
-            const isSelected = selectedIds.includes(card.id);
-            const isBurned = card.usedBy !== null;
-            
-            // Determine Color
-            let textColor = '#000';
-            if (isBurned) textColor = '#444';
-            else if (['♥', '♦'].includes(card.suit) && !isSelected) textColor = '#d00';
-            
-            return (
-              <button
-                key={card.id}
-                disabled={isBurned}
-                onClick={() => onToggle(card.id)}
-                style={{
-                  width: '100%', 
-                  height: '100%', // Fill the grid cell exactly
-                  background: isBurned ? '#1a1a1a' : isSelected ? '#ffd700' : '#f0f0f0',
-                  color: textColor,
-                  border: isSelected ? '3px solid white' : 'none',
-                  borderRadius: 4,
-                  fontWeight: 'bold', 
-                  fontSize: 'clamp(0.8rem, 1.5vw, 1.5rem)', // Responsive Text
-                  opacity: isBurned ? 0.2 : 1,
-                  cursor: isBurned ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: isSelected ? '0 0 15px #ffd700' : 'none',
-                  transition: 'transform 0.1s'
-                }}
-                onMouseDown={e => !isBurned && (e.currentTarget.style.transform = 'scale(0.95)')}
-                onMouseUp={e => !isBurned && (e.currentTarget.style.transform = 'scale(1)')}
-              >
-                {/* Stack Rank and Suit vertically for better fit? Or side by side? Side by side is standard */}
-                <span>{card.rank}</span>
-                <span style={{fontSize: '0.8em', marginLeft: 2}}>{card.suit}</span>
-              </button>
-            );
-          })}
+          <div>
+            <h2 style={{ margin: 0, color: '#00f0ff', fontSize: '1.2rem', letterSpacing: 2 }}>
+              HAND SELECTION
+            </h2>
+          </div>
+          <button onClick={onClose} style={closeBtnStyle}>ABORT</button>
         </div>
 
-        {/* --- BOTTOM HUD --- */}
-        <div style={{ 
-          background: '#111', 
-          borderRadius: 8,
-          padding: '10px 20px', 
-          border: '1px solid #333',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-          height: 60, flexShrink: 0 
+        {/* --- GRID CONTAINER (Scrollable) --- */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto', // Enable scroll if vertical space is tight
+          padding: '20px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center' // Center the grid vertically if there's extra space
         }}>
-          {/* MATH DISPLAY */}
-          <div style={{ fontSize: '1.2rem', fontFamily: 'monospace', color: '#888', display: 'flex', alignItems: 'center', gap: 20 }}>
-             <div>TARGET: <span style={{ color: '#fff', fontSize: '1.5rem' }}>{targetValue}</span></div>
-             <div style={{ width: 2, height: 20, background: '#444' }} />
-             <div>SUM: <span style={{ color: currentSum === targetValue ? '#0f0' : '#fff', fontSize: '1.5rem', fontWeight: 'bold' }}>{currentSum}</span></div>
-          </div>
+          
+          {/* THE GRID ITSELF */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(13, 1fr)', 
+            gap: '8px',
+            width: '100%',
+            // 🛑 CARD HEIGHT FIX: 
+            // This ensures cards scale down if the screen is short, 
+            // preventing them from pushing the footer off-screen.
+            maxWidth: '1200px' 
+          }}>
+            {sortedDeck.map(card => {
+              const isSelected = selectedIds.includes(card.id);
+              const isBurned = card.usedBy !== null;
+              const isRed = ['♥', '♦'].includes(card.suit);
 
-          {/* CONFIRM BUTTON */}
-          <button 
-            onClick={onConfirm}
-            disabled={currentSum !== targetValue || selectedIds.length !== 5}
-            style={{
-              height: '100%',
-              padding: '0 40px',
-              backgroundColor: (currentSum === targetValue && selectedIds.length === 5) ? '#ffd700' : '#222',
-              color: (currentSum === targetValue && selectedIds.length === 5) ? 'black' : '#555',
-              fontWeight: 'bold',
-              fontSize: '1rem',
-              border: 'none',
-              borderRadius: 4,
-              cursor: (currentSum === targetValue && selectedIds.length === 5) ? 'pointer' : 'not-allowed',
-              textTransform: 'uppercase',
-              letterSpacing: 1
-            }}
-          >
-            Confirm Hand
-          </button>
+              return (
+                <button
+                  key={card.id}
+                  disabled={isBurned}
+                  onClick={() => onToggle(card.id)}
+                  style={{
+                    aspectRatio: '0.7', // Slightly squatter card ratio fits better (was 2/3 = 0.66)
+                    background: isBurned ? '#111' : isSelected ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255,255,255,0.04)',
+                    border: isSelected ? '1px solid #00f0ff' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 4,
+                    color: isBurned ? '#444' : (isRed ? '#ff5555' : '#eee'),
+                    opacity: isBurned ? 0.3 : 1,
+                    cursor: isBurned ? 'not-allowed' : 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.1s',
+                    transform: isSelected ? 'scale(1.05)' : 'none',
+                    boxShadow: isSelected ? '0 0 10px rgba(0,240,255,0.4)' : 'none'
+                  }}
+                >
+                  <div style={{ fontSize: 'clamp(0.8rem, 1.5vw, 1.1rem)', fontWeight: 'bold' }}>{card.rank}</div>
+                  <div style={{ fontSize: 'clamp(1rem, 2vw, 1.5rem)' }}>{card.suit}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* --- FOOTER (Always Visible) --- */}
+        <div style={{
+          padding: '15px 30px',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0 // Prevent footer from being crushed
+        }}>
+           <div style={{ fontFamily: 'monospace', fontSize: '1rem', color: '#888' }}>
+              SUM: <span style={{ 
+                 color: currentSum === targetValue ? '#00ff88' : currentSum > targetValue ? '#ff4444' : '#fff', 
+                 fontWeight: 'bold', fontSize: '1.4rem' 
+              }}>{currentSum}</span> 
+              <span style={{ margin: '0 10px', color: '#444' }}>/</span> 
+              TARGET: {targetValue}
+           </div>
+
+           <button 
+             onClick={onConfirm}
+             disabled={currentSum !== targetValue || selectedIds.length !== 5}
+             style={{
+               background: (currentSum === targetValue && selectedIds.length === 5) ? '#00f0ff' : '#222',
+               color: (currentSum === targetValue && selectedIds.length === 5) ? '#000' : '#555',
+               border: 'none', padding: '12px 30px', fontSize: '1rem', fontWeight: 'bold', borderRadius: 4,
+               cursor: (currentSum === targetValue && selectedIds.length === 5) ? 'pointer' : 'not-allowed',
+               boxShadow: (currentSum === targetValue && selectedIds.length === 5) ? '0 0 15px rgba(0,240,255,0.6)' : 'none'
+             }}
+           >
+             CONFIRM
+           </button>
         </div>
 
       </div>
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      `}</style>
     </div>
   );
+};
+
+const closeBtnStyle: React.CSSProperties = {
+  background: 'transparent', border: '1px solid #ff4444', color: '#ff4444',
+  padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem'
 };
