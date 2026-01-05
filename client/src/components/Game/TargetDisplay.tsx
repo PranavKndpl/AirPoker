@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text, Float } from '@react-three/drei';
 
 export const TargetDisplay = ({ value }: { value: number }) => {

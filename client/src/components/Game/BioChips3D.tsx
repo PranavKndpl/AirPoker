@@ -1,5 +1,5 @@
 // client/src/components/Game/BioChips3D.tsx
-import React, { useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useTexture, Billboard } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';

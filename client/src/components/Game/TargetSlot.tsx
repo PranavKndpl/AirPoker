@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text } from '@react-three/drei';
 
 export const TargetSlot = ({ position, label }: { position: [number, number, number], label?: string }) => {

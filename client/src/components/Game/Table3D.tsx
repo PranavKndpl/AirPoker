@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, RoundedBox } from '@react-three/drei';
 
 // COLORS
