@@ -13,7 +13,7 @@ import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 
 import { Atmosphere } from "./Atmosphere";
 import { Table3D } from "../Game/Table3D";
-import { BioChipsStack } from "../Game/BioChipsSprite";
+import { BioChips3D } from "../Game/BioChips3D";
 import { Card3D } from "../Game/Card3D";
 import { NumberCard3D } from "../Game/NumberCard3D";
 import { TargetSlot } from "../Game/TargetSlot";
@@ -194,9 +194,20 @@ export const GameScene = ({
           );
         })}
 
-        {/* CHIPS */}
-        <BioChipsStack count={bios} position={[-7, -1.1, 5]} />
-        <BioChipsStack count={opponentBios} position={[7, -1.9, -3]} />
+        {/* CHIPS - HD SPRITE STACKS */}
+        
+        {/* Left Side (You) */}
+        {/* Y CHANGED: -1.95 -> -1.0 */}
+        <group position={[-7.5, -1.0, 5.5]}>
+           <BioChips3D count={bios} position={[0, 0, 0]} />
+        </group>
+
+        {/* Right Side (Opponent) */}
+        {/* Y CHANGED: -1.95 -> -1.0 */}
+        <group position={[7.5, -1.0, -3]}>
+           <BioChips3D count={opponentBios} position={[0, 0, 0]} />
+        </group>
+     
       </Suspense>
 
       <ContactShadows
