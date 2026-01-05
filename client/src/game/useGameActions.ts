@@ -58,7 +58,7 @@ export const useGameActions = ({
     if (!canTransition(localStep, LocalStep.BETTING)) return;
     if (!selectedTargetId) return;
 
-    setLocalStep(LocalStep.BETTING);
+    // setLocalStep(LocalStep.BETTING);
     socket.emit("action_target", { targetId: selectedTargetId });
   };
 

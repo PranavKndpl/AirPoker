@@ -12,21 +12,52 @@ export const ActiveTurnPanel: React.FC<TurnPanelProps> = ({ state, actions }) =>
   if (state.overlay !== "NONE") return null;
   const [showGrid, setShowGrid] = useState(false);
 
-  // 1. TARGET SELECTION PHASE
+// 1. TARGET SELECTION PHASE
   if (state.localStep === LocalStep.PICK_TARGET) {
+
+    // ✅ NEW: CINEMATIC SILENCE
+    // If I have already locked in, HIDE UI immediately.
+    // This lets us watch the reveal animation without a button in the way.
+    if (state.myLocked) {
+      return null;
+    }
+
+    // CASE A: Reveal Phase (Opponent ready, numbers showing)
+    // (This is a backup check, 'myLocked' usually catches this first)
+    if (
+      state.opponentLocked &&
+      state.selectedTargetId &&
+      state.opponentTargetValue > 0
+    ) {
+      return null; 
+    }
+
+    // CASE B: I haven't picked yet
     if (!state.selectedTargetId) {
-      // Prompt user to pick
       return (
         <div style={hintStyle}>
           Select a Target Number
         </div>
       );
     }
-    // Show Confirm Button
+
+    // CASE C: Picked, waiting to Confirm
     return (
       <div style={bottomCenterStyle}>
-        <div style={{ marginBottom: 10, color: '#ffd700', fontSize: '1.2rem', fontWeight: 'bold' }}>
-           TARGET: {state.myNumberHand.find((c: any) => c.id === state.selectedTargetId)?.value}
+        <div
+          style={{
+            marginBottom: 10,
+            color: "#ffd700",
+            fontSize: "1.2rem",
+            fontWeight: "bold"
+          }}
+        >
+          TARGET:{" "}
+          {
+            state.myNumberHand.find(
+              (c: any) => c.id === state.selectedTargetId
+            )?.value
+          }
         </div>
         <button onClick={actions.confirmTarget} style={mainBtnStyle}>
           LOCK IN TARGET
@@ -52,9 +83,9 @@ export const ActiveTurnPanel: React.FC<TurnPanelProps> = ({ state, actions }) =>
     if (!showGrid) {
       return (
         <div style={bottomCenterStyle}>
-           <button onClick={() => setShowGrid(true)} style={mainBtnStyle}>
-             OPEN HAND SELECTION
-           </button>
+          <button onClick={() => setShowGrid(true)} style={mainBtnStyle}>
+            OPEN HAND SELECTION
+          </button>
         </div>
       );
     }
@@ -78,18 +109,33 @@ export const ActiveTurnPanel: React.FC<TurnPanelProps> = ({ state, actions }) =>
 
 /* --- STYLES --- */
 const bottomCenterStyle: React.CSSProperties = {
-  position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)",
-  textAlign: "center", zIndex: 20, pointerEvents: "auto"
+  position: "fixed",
+  bottom: 40,
+  left: "50%",
+  transform: "translateX(-50%)",
+  textAlign: "center",
+  zIndex: 20,
+  pointerEvents: "auto"
 };
 
 const hintStyle: React.CSSProperties = {
-  position: "fixed", top: 100, width: "100%", textAlign: "center",
-  color: "#fff", fontSize: "1.5rem", textShadow: "0 0 10px #000",
+  position: "fixed",
+  top: 100,
+  width: "100%",
+  textAlign: "center",
+  color: "#fff",
+  fontSize: "1.5rem",
+  textShadow: "0 0 10px #000",
   pointerEvents: "none"
 };
 
 const mainBtnStyle: React.CSSProperties = {
-  padding: "15px 40px", fontSize: "1.2rem", fontWeight: "bold",
-  background: "#ffd700", border: "none", borderRadius: 8,
-  cursor: "pointer", boxShadow: "0 0 20px rgba(255,215,0,0.4)"
+  padding: "15px 40px",
+  fontSize: "1.2rem",
+  fontWeight: "bold",
+  background: "#ffd700",
+  border: "none",
+  borderRadius: 8,
+  cursor: "pointer",
+  boxShadow: "0 0 20px rgba(255,215,0,0.4)"
 };

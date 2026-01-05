@@ -72,22 +72,26 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
       playerId: socket.id,
       status: "TARGET_LOCKED"
     });
-    // 2. NEW: Check if BOTH are locked. If yes, REVEAL NUMBERS!
-    const allLocked = room.players.every(pid => room.playerStates[pid].targetLocked);
-    
-    if (allLocked) {
-      console.log(`[ROOM ${room.id}] Both targets locked. Revealing values.`);
-      
-      const revealData: Record<string, number> = {};
-      
-      room.players.forEach(pid => {
-         const tId = room.turnData[pid]?.targetId;
-         const card = room.playerStates[pid].numberHand.find(c => c.id === tId);
-         revealData[pid] = card ? card.value : 0;
-      });
 
-      // Emit new event 'reveal_targets'
+    const allLocked = room.players.every(pid => room.playerStates[pid].targetLocked);
+      
+    if (allLocked) {
+      console.log(`[ROOM ${room.id}] Both locked. Revealing & Transitioning.`);
+        
+      // 1. REVEAL (Instant)
+      const revealData: Record<string, number> = {};
+      room.players.forEach(pid => {
+        const tId = room.turnData[pid]?.targetId;
+        const card = room.playerStates[pid].numberHand.find(c => c.id === tId);
+        revealData[pid] = card ? card.value : 0;
+      });
       io.to(room.id).emit("reveal_targets", revealData);
+
+      // 2. PAUSE then START BETTING (The "Director" Logic)
+      // We use a timeout so players have 2 seconds to stare at the numbers
+      setTimeout(() => {
+        io.to(room.id).emit("start_betting_phase");
+      }, 2500); // 2.5 seconds delay
     }
   });
 
