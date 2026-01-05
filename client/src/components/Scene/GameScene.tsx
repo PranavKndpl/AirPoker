@@ -1,7 +1,6 @@
 // client/src/components/Scene/GameScene.tsx
 import { Suspense, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
-
 import {
   OrbitControls,
   PerspectiveCamera,
@@ -21,7 +20,6 @@ import { TargetSlot } from "../Game/TargetSlot";
 import type { SuitSymbol } from "../../../../shared/types";
 
 /* ---------------- TYPES ---------------- */
-
 interface NumberCard {
   id: string;
   value: number;
@@ -51,13 +49,12 @@ interface GameSceneProps {
   bios: number;
   opponentBios: number;
 
-  opponentLocked: boolean; // <-- NEW PROP
+  opponentLocked: boolean;
 
   onTargetClick: (id: string) => void;
 }
 
 /* ---------------- LOADER ---------------- */
-
 const Loader = () => (
   <Html center>
     <div className="text-yellow-500 font-mono">LOADING...</div>
@@ -65,7 +62,6 @@ const Loader = () => (
 );
 
 /* ---------------- MAIN SCENE ---------------- */
-
 export const GameScene = ({
   phase,
   localStep,
@@ -82,21 +78,17 @@ export const GameScene = ({
   bios,
   opponentBios,
 
-  opponentLocked, // <-- NEW
+  opponentLocked,
 
   onTargetClick,
 }: GameSceneProps) => {
   /* ---------------- INIT ---------------- */
-
   useEffect(() => {
     console.log("Scene initialized");
-    return () => {
-      console.log("Scene disposed");
-    };
+    return () => console.log("Scene disposed");
   }, []);
 
   /* ---------------- DATA UPDATES ---------------- */
-
   useEffect(() => {
     console.log("Deck/hand updated", {
       globalDeck,
@@ -108,13 +100,12 @@ export const GameScene = ({
   }, [globalDeck, myNumberHand, selectedCardIds, selectedTargetId, opponentTargetValue]);
 
   /* ---------------- VISIBILITY LOGIC ---------------- */
-
   const showOpponentCard =
     opponentLocked || phase === "RESOLUTION" || phase === "GAME_OVER";
 
   return (
     <Canvas shadows style={{ position: "absolute", inset: 0 }}>
-      {/* ---------------- CAMERA & LIGHT ---------------- */}
+      {/* CAMERA & LIGHT */}
       <PerspectiveCamera makeDefault position={[0, 18, 12]} fov={35} />
       <ambientLight intensity={0.4} />
 
@@ -129,12 +120,15 @@ export const GameScene = ({
           <Noise opacity={0.05} />
         </EffectComposer>
 
-        {/* ---------------- TARGET SLOTS ---------------- */}
+        {/* TARGET SLOTS */}
         <TargetSlot position={[0, 0.55, 2]} label="YOUR TARGET" />
         <TargetSlot position={[0, 0.55, -2]} label="OPPONENT" />
 
-        {/* ---------------- PLAYER NUMBER CARDS ---------------- */}
+        {/* PLAYER NUMBER CARDS */}
         {myNumberHand.map((card, i) => {
+          // Skip used cards
+          if (card.isUsed) return null;
+
           const isSelected = card.id === selectedTargetId;
           const position: [number, number, number] = isSelected
             ? [0, 0.6, 2]
@@ -146,13 +140,13 @@ export const GameScene = ({
               value={card.value}
               position={position}
               isSelected={isSelected}
-              isUsed={card.isUsed}
-              onClick={() => onTargetClick(card.id)} // Highlight only
+              isUsed={false} // Already filtered out used cards
+              onClick={() => onTargetClick(card.id)}
             />
           );
         })}
 
-        {/* ---------------- OPPONENT TARGET ---------------- */}
+        {/* OPPONENT TARGET */}
         {showOpponentCard && (
           <NumberCard3D
             key="opponent-target"
@@ -162,7 +156,7 @@ export const GameScene = ({
           />
         )}
 
-        {/* ---------------- PLAYED CARDS ---------------- */}
+        {/* PLAYED CARDS */}
         {selectedCardIds.map((id, i) => {
           const card = globalDeck.find(c => c.id === id);
           if (!card) return null;
@@ -177,7 +171,7 @@ export const GameScene = ({
           );
         })}
 
-        {/* ---------------- BIOS CHIPS ---------------- */}
+        {/* BIOS CHIPS */}
         <BioChipsStack count={bios} position={[-6, 0.55, 3]} />
         <BioChipsStack count={opponentBios} position={[6, 0.55, -3]} />
       </Suspense>

@@ -1,53 +1,75 @@
 import React from "react";
+import { socket } from "../../network/socketBridge";
 
 interface GameOverProps {
-  winnerId: string | null; // The ID of the winner (or null for Draw)
+  winnerId: string | null;
   myId: string;
-  reason: "Bankruptcy" | "LIMIT_REACHED";
+  reason: string;
   finalBios?: Record<string, number>;
 }
 
 export const GameOverScreen: React.FC<GameOverProps> = ({ winnerId, myId, reason, finalBios }) => {
   
   const isWinner = winnerId === myId;
-  const isDraw = winnerId === null;
+  const isDraw = winnerId === "DRAW";
 
-  // Cinematic Text Logic
-  const title = isDraw ? "DRAW" : isWinner ? "VICTORY" : "DEFEAT";
-  const color = isDraw ? "#888" : isWinner ? "#00ff88" : "#ff4444";
-  
-  const subText = reason === "Bankruptcy" 
-    ? (isWinner ? "Opponent ran out of Air." : "You ran out of Air.")
-    : "5 Rounds Completed. Air Supply check.";
+  const title = isDraw ? "MATCH DRAW" : isWinner ? "MATCH WON" : "MATCH LOST";
+  const titleColor = isDraw ? "#fff" : isWinner ? "#00ff88" : "#ff4444";
+  const subText = isWinner ? "Opponent Eliminated." : "You have been Eliminated.";
 
   return (
     <div style={overlayStyle}>
       <div style={panelStyle}>
-        <h1 style={{ ...titleStyle, color }}>{title}</h1>
         
-        <div style={{ fontSize: "1.5rem", color: "#ccc", marginBottom: 40 }}>
+        {/* MAIN TITLE */}
+        <h1 style={{ 
+          fontSize: "5rem", margin: "0 0 20px 0", 
+          color: titleColor, textShadow: `0 0 50px ${titleColor}40`,
+          letterSpacing: 10, textTransform: "uppercase"
+        }}>
+          {title}
+        </h1>
+
+        <div style={{ fontSize: "1.5rem", color: "#888", marginBottom: 60, fontFamily: "monospace" }}>
+          REASON: <span style={{ color: "#fff" }}>{reason}</span>
+          <br/>
           {subText}
         </div>
 
-        {/* STATS DISPLAY */}
+        {/* STATS COMPARISON */}
         {finalBios && (
-           <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 40 }}>
-              <div>
-                 <div style={{color: '#888', fontSize: '0.9rem'}}>YOU</div>
-                 <div style={{fontSize: '2rem', color: '#fff'}}>{finalBios[myId] ?? 0}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 100, marginBottom: 60 }}>
+            {/* YOU */}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: '#888', fontSize: '0.9rem', marginBottom: 10, letterSpacing: 2 }}>
+                YOUR AIR
               </div>
-              <div>
-                 <div style={{color: '#888', fontSize: '0.9rem'}}>OPPONENT</div>
-                 <div style={{fontSize: '2rem', color: '#fff'}}>
-                    {Object.entries(finalBios).find(([id]) => id !== myId)?.[1] ?? 0}
-                 </div>
+              <div style={{ fontSize: '3rem', color: isWinner ? '#ffd700' : '#444', fontWeight: 'bold' }}>
+                {finalBios[myId] ?? 0}
               </div>
-           </div>
+            </div>
+
+            {/* VS */}
+            <div style={{ alignSelf: 'center', fontSize: '2rem', color: '#333', fontStyle: 'italic' }}>
+              VS
+            </div>
+
+            {/* OPPONENT */}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ color: '#888', fontSize: '0.9rem', marginBottom: 10, letterSpacing: 2 }}>
+                OPPONENT
+              </div>
+              <div style={{ fontSize: '3rem', color: !isWinner ? '#ffd700' : '#444', fontWeight: 'bold' }}>
+                 {Object.entries(finalBios).find(([id]) => id !== myId)?.[1] ?? 0}
+              </div>
+            </div>
+          </div>
         )}
 
+        {/* ACTION BUTTON */}
         <button 
           onClick={() => window.location.reload()} 
-          style={btnStyle}
+          style={restartBtnStyle}
         >
           RETURN TO LOBBY
         </button>
@@ -56,22 +78,19 @@ export const GameOverScreen: React.FC<GameOverProps> = ({ winnerId, myId, reason
   );
 };
 
-// Reuse your styles from ResultScreen to keep it consistent
+/* --- STYLES --- */
 const overlayStyle: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)",
+  position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)",
   display: "flex", alignItems: "center", justifyContent: "center",
   zIndex: 11000, pointerEvents: "auto"
 };
+
 const panelStyle: React.CSSProperties = {
-  textAlign: "center", background: "#050505",
-  padding: "60px", border: "1px solid #333", borderRadius: 12,
-  minWidth: 500, boxShadow: "0 0 50px rgba(0,0,0,0.8)"
+  textAlign: "center", width: "100%"
 };
-const titleStyle: React.CSSProperties = {
-  fontSize: "4rem", marginBottom: 20, letterSpacing: 4, textTransform: "uppercase"
-};
-const btnStyle: React.CSSProperties = {
-  padding: "15px 40px", background: "#333", color: "white",
-  border: "1px solid #555", fontSize: "1.2rem", cursor: "pointer",
-  marginTop: 20, borderRadius: 4
+
+const restartBtnStyle: React.CSSProperties = {
+  padding: "20px 60px", background: "transparent", color: "#fff",
+  border: "2px solid #333", borderRadius: 0, fontSize: "1.2rem", 
+  letterSpacing: 4, cursor: "pointer", transition: "all 0.2s"
 };

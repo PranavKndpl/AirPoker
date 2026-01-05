@@ -58,7 +58,9 @@ export const startRound = (room: Room, io: Server) => {
     const p = room.playerStates[pid];
     p.isSubmitted = false;
     p.targetLocked = false;
-    p.numberHand = generateNumberHand();
+    if (room.roundCount === 1) {
+       p.numberHand = generateNumberHand();
+    }
 
     if (p.bios > 0) {
       p.bios -= 1;
@@ -71,6 +73,7 @@ export const startRound = (room: Room, io: Server) => {
   room.players.forEach(pid => {
     const opponentId = room.players.find(p => p !== pid)!;
     io.to(pid).emit("new_round_start", {
+      roomId: room.id,
       globalDeck: room.globalDeck,
       numberHand: room.playerStates[pid].numberHand,
       bios: room.playerStates[pid].bios,
@@ -125,7 +128,6 @@ const handleRankClash = (
 
   console.log(`[CLASH] Room ${room.id} - Ranks: ${commonRanks.join(", ")}`);
 
-  // Do NOT burn cards currently in play
   const activeIds = new Set([...p1Cards, ...p2Cards].map(c => c.id));
 
   const cardsToBurn = room.globalDeck.filter(
@@ -177,13 +179,15 @@ export const endRound = (
   room.phase = "RESOLUTION";
 
   const [p1, p2] = room.players;
+  const p1State = room.playerStates[p1];
+  const p2State = room.playerStates[p2];
 
   const result = resolveRound(
     [p1, p2],
     room.turnData,
     {
-      [p1]: room.playerStates[p1].numberHand,
-      [p2]: room.playerStates[p2].numberHand
+      [p1]: p1State.numberHand,
+      [p2]: p2State.numberHand
     },
     room.globalDeck
   );
@@ -197,7 +201,7 @@ export const endRound = (
     handleRankClash(room, p1Cards, p2Cards);
   }
 
-  /* -------- Payout -------- */
+  /* -------- Payout & Win Count -------- */
   const winner =
     result.outcome === "WIN" ? p1 :
     result.outcome === "LOSE" ? p2 :
@@ -205,12 +209,11 @@ export const endRound = (
 
   if (winner) {
     room.playerStates[winner].bios += room.pot;
-    console.log(`[PAYOUT] Player ${winner} wins ${room.pot} bios`);
-  } else {
-    console.log(`[DRAW] Pot discarded`);
+    room.playerStates[winner].wins += 1;
+    console.log(`[PAYOUT] Player ${winner} wins pot & round point`);
   }
 
-  /* -------- Burn Played Cards (Deduped) -------- */
+  /* -------- Burn Played Cards -------- */
   const playedIds = [
     ...(room.turnData[p1]?.cardIds || []),
     ...(room.turnData[p2]?.cardIds || [])
@@ -222,23 +225,27 @@ export const endRound = (
     console.log(`[BURN] Room ${room.id} burned ${uniqueIds.length} cards (Played)`);
   }
 
-  /* -------- Game Over -------- */
+  /* -------- Match End Conditions -------- */
   let gameOver: any = null;
-  if (
-    room.playerStates[p1].bios <= 0 ||
-    room.playerStates[p2].bios <= 0
-  ) {
-    gameOver = {
-      winner:
-        room.playerStates[p1].bios <= 0 ? p2 :
-        room.playerStates[p2].bios <= 0 ? p1 :
-        null,
-      reason: "BANKRUPTCY",
-      finalBios: {
-        [p1]: room.playerStates[p1].bios,
-        [p2]: room.playerStates[p2].bios
-      }
-    };
+
+  if (p1State.bios <= 0) {
+    gameOver = { winner: p2, reason: "BANKRUPTCY", stats: { [p1]: 0, [p2]: p2State.bios } };
+  } else if (p2State.bios <= 0) {
+    gameOver = { winner: p1, reason: "BANKRUPTCY", stats: { [p1]: p1State.bios, [p2]: 0 } };
+  } else if (p1State.wins >= 3) {
+    gameOver = { winner: p1, reason: "DOMINANCE (3-5)", stats: { [p1]: p1State.bios, [p2]: p2State.bios } };
+  } else if (p2State.wins >= 3) {
+    gameOver = { winner: p2, reason: "DOMINANCE (3-5)", stats: { [p1]: p1State.bios, [p2]: p2State.bios } };
+  } else if (room.roundCount >= 5) {
+    const winnerId =
+      p1State.bios > p2State.bios ? p1 :
+      p2State.bios > p1State.bios ? p2 :
+      "DRAW";
+    gameOver = { winner: winnerId, reason: "TIME LIMIT", stats: { [p1]: p1State.bios, [p2]: p2State.bios } };
+  }
+
+  if (gameOver) {
+    room.phase = "GAME_OVER";
   }
 
   /* -------- Target Values -------- */
@@ -249,13 +256,25 @@ export const endRound = (
     targetValues[pid] = card ? card.value : 0;
   });
 
+  /* -------- MARK TARGETS AS USED -------- */
+  [p1, p2].forEach(pid => {
+    const targetId = room.turnData[pid]?.targetId;
+
+    if (targetId) {
+      const cardIndex = room.playerStates[pid].numberHand.findIndex(c => c.id === targetId);
+
+      if (cardIndex !== -1) {
+        room.playerStates[pid].numberHand[cardIndex].isUsed = true;
+      }
+    }
+  });
+
+  /* -------- EMIT ROUND RESULT -------- */
   io.to(room.id).emit("round_result", {
     result,
     updatedDeck: room.globalDeck,
-    updatedBios: {
-      [p1]: room.playerStates[p1].bios,
-      [p2]: room.playerStates[p2].bios
-    },
+    updatedBios: { [p1]: p1State.bios, [p2]: p2State.bios },
+    updatedWins: { [p1]: p1State.wins, [p2]: p2State.wins },
     opponentTargets: targetValues,
     gameOver
   });

@@ -63,9 +63,14 @@ const MiniCard = ({
 
 /* --- MAIN SCREEN --- */
 export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound }) => {
-  if (!result || !result.playerHand || !result.opponentHand) return null;
+  // 1. SAFETY CHECK: If result is null, don't crash
+  if (!result) return null;
 
-  const { playerHand, opponentHand, outcome, opponentTargetValue } = result;
+  // 2. TIMEOUT FALLBACK: If hands are missing (Timeout), create dummy data
+  const playerHand = result.playerHand || { name: "TIMED OUT", strength: 0, cards: [] };
+  const opponentHand = result.opponentHand || { name: "TIMED OUT", strength: 0, cards: [] };
+  const opponentTargetValue = result.opponentTargetValue ?? 0;
+  const outcome = result.outcome;
 
   // 1. DATA PREP
   const pCards = playerHand.cards || [];
@@ -98,12 +103,10 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound 
       </style>
 
       <div style={panelStyle}>
-        
         {/* HEADER */}
         <h1 style={{ ...titleStyle, color: titleColor }}>{titleText}</h1>
-        
+
         <div style={contentContainerStyle}>
-          
           {/* --- YOU --- */}
           <div style={sideContainerStyle}>
             <div style={{...labelStyle, color: '#ffd700'}}>YOU</div>
@@ -115,8 +118,8 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound 
                     key={i} 
                     rank={c.rank} 
                     suit={c.suit} 
-                    isExactClash={exactClashIds.includes(c.id)} // 🛑 ONLY GLOW IF EXACT
-                    isRankClash={clashedRanks.includes(c.rank)} // ⚠️ SUBTLE HINT
+                    isExactClash={exactClashIds.includes(c.id)}
+                    isRankClash={clashedRanks.includes(c.rank)}
                   />
                ))}
             </div>
@@ -125,7 +128,6 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound 
           {/* --- VS --- */}
           <div style={vsContainerStyle}>
              <div style={vsTextStyle}>VS</div>
-             {/* Show text if ANY Rank Match happened (explains the burn) */}
              {clashedRanks.length > 0 && (
                  <div style={{fontSize: '0.8rem', color: '#ff3333', marginTop: 10, fontWeight: 'bold', textShadow: '0 0 5px #f00'}}>
                      RANK CLASH
@@ -145,27 +147,26 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound 
                     key={i} 
                     rank={c.rank} 
                     suit={c.suit} 
-                    isExactClash={exactClashIds.includes(c.id)} // 🛑 ONLY GLOW IF EXACT
-                    isRankClash={clashedRanks.includes(c.rank)} // ⚠️ SUBTLE HINT
+                    isExactClash={exactClashIds.includes(c.id)}
+                    isRankClash={clashedRanks.includes(c.rank)}
                   />
                ))}
             </div>
 
             <div style={targetUsedStyle}>
-               TARGET: <span style={{color: '#fff', fontSize: '1.2rem'}}>{opponentTargetValue ?? 0}</span>
+               TARGET: <span style={{color: '#fff', fontSize: '1.2rem'}}>{opponentTargetValue}</span>
             </div>
           </div>
-
         </div>
 
         <button onClick={onNextRound} style={btnStyle}>
           NEXT ROUND
         </button>
-
       </div>
     </div>
   );
 };
+
 
 /* --- STYLES --- */
 const overlayStyle: React.CSSProperties = {

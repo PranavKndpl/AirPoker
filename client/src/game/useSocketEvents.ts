@@ -22,11 +22,12 @@ interface SocketEventHandlers {
   setOpponentLocked: any;
   setOpponentTargetValue: any;
   setMyLocked: any;
+  setMyWins: any;
+  setOpponentWins: any;
 }
 
 // ⚡️ REFACTOR: Accept a single 'handlers' object
 export const useSocketEvents = (handlers: SocketEventHandlers) => {
-  // Destructure them here
   const {
     setRoomId,
     setPhase,
@@ -44,7 +45,9 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
     setGameOver,
     setOpponentLocked,
     setOpponentTargetValue,
-    setMyLocked
+    setMyLocked,
+    setMyWins,
+    setOpponentWins
   } = handlers;
 
   useEffect(() => {
@@ -55,6 +58,9 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
 
     const handleNewRound = (data: any) => {
       console.log("[CLIENT] New round started");
+      if (data.roomId) {
+        setRoomId(data.roomId);
+      }
       setPhase("GAME_LOOP");
       setLocalStep(LocalStep.PICK_TARGET);
       setGlobalDeck(data.globalDeck);
@@ -68,7 +74,7 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
       setSelectedCardIds([]);
       setRoundResult(null);
       
-      // Resets
+      // Reset locks and targets
       setOpponentLocked(false);
       setOpponentTargetValue(0);
       setMyLocked(false);
@@ -104,12 +110,21 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
     };
 
     const handleRoundResult = (data: any) => {
+      const winsData = data.updatedWins || {};
+      // Update global wins if handler exists
+      if (setMyWins && setOpponentWins) {
+        const myId = socket.id!;
+        const opponentId = Object.keys(winsData).find(id => id !== myId);
+        setMyWins(winsData[myId] ?? 0);
+        setOpponentWins(opponentId ? winsData[opponentId] ?? 0 : 0);
+      }
+
       const result = data.result || {};
       const myId = socket.id!;
       const [p1, p2] = Object.keys(result.hands);
       const opponentId = myId === p1 ? p2 : p1;
 
-      const myOutcome = result.outcome === "DRAW" ? "DRAW" 
+      const myOutcome = result.outcome === "DRAW" ? "DRAW"
         : (result.outcome === "WIN" && myId === p1) || (result.outcome === "LOSE" && myId === p2)
         ? "WIN" : "LOSE";
 
@@ -135,14 +150,14 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
       if (data.gameOver) setGameOver(data.gameOver);
     };
 
-    const handleStatusUpdate = (data: { playerId: string, status: string }) => {
-       if (data.status === "TARGET_LOCKED") {
-           if (data.playerId === socket.id) {
-               setMyLocked(true);
-           } else {
-               setOpponentLocked(true);
-           }
-       }
+    const handleStatusUpdate = (data: { playerId: string; status: string }) => {
+      if (data.status === "TARGET_LOCKED") {
+        if (data.playerId === socket.id) {
+          setMyLocked(true);
+        } else {
+          setOpponentLocked(true);
+        }
+      }
     };
 
     /* ------------------- LISTENERS ------------------- */

@@ -2,10 +2,10 @@
 import React from "react";
 import { useGameState } from "./game/useGameState";
 import { useGameActions } from "./game/useGameActions";
+
+// Components
 import { GameScene } from "./components/Scene/GameScene";
 import { GameHUD } from "./components/UI/GameHUD";
-
-// Import our new Modular Components
 import { GameOverlays } from "./components/UI/GameOverlays";
 import { ActiveTurnPanel } from "./components/UI/ActiveTurnPanel";
 
@@ -31,29 +31,34 @@ export default function App() {
     setSelectedCardIds
   });
 
-
   return (
     <div style={rootStyle}>
       
       {/* 1. GLOBAL OVERLAYS (Lobby, Results, Game Over, Waiting) */}
+      {/* This now handles the "True Winner" screen automatically via state.gameOver */}
       <GameOverlays state={state} actions={actions} />
 
       {/* 2. 3D GAME WORLD */}
       <GameScene
         phase={state.phase}
         localStep={state.localStep}
+        
         myNumberHand={state.myNumberHand}
         selectedTargetId={state.selectedTargetId}
         selectedCardIds={state.selectedCardIds}
         globalDeck={state.globalDeck}
+        
         targetValue={state.targetValue}
-        opponentTargetValue={state.opponentTargetValue}
+        opponentTargetValue={state.opponentTargetValue} // Now updates dynamically
+        
         bios={state.bios}
         opponentBios={state.opponentBios}
+        
         onTargetClick={(id) => actions.selectTarget(id)}
-        opponentLocked={state.opponentLocked}      />
+        opponentLocked={state.opponentLocked}
+      />
 
-      {/* 3. HEADS UP DISPLAY */}
+      {/* 3. HEADS UP DISPLAY (Updated with Match Scores) */}
       <GameHUD
         roomId={state.roomId}
         timer={state.timer}
@@ -61,6 +66,10 @@ export default function App() {
         bios={state.bios}
         opponentBios={state.opponentBios}
         phase={state.phase}
+        
+        // 🏆 NEW: Pass Match Score to HUD
+        myWins={state.myWins} 
+        opponentWins={state.opponentWins}
       />
 
       {/* 4. ACTIVE TURN UI (Betting / Hand Selection) */}
@@ -93,5 +102,5 @@ const floatingBtnContainer: React.CSSProperties = {
 const returnBtnStyle: React.CSSProperties = {
   padding: "15px 30px", background: "#ffd700", border: "none",
   fontSize: "1.5rem", fontWeight: "bold", cursor: "pointer",
-  pointerEvents: "auto"
+  pointerEvents: "auto", borderRadius: 8, boxShadow: "0 4px 10px rgba(0,0,0,0.5)"
 };

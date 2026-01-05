@@ -6,6 +6,7 @@ export interface PlayerState {
   numberHand: NumberCard[];
   targetLocked: boolean;
   isSubmitted: boolean;
+  wins: number;
 }
 
 export interface TurnData {
@@ -45,6 +46,7 @@ export const RoomStore = {
       playerStates: {
         [socketId]: {
           bios: 25,
+          wins: 0,
           numberHand: [],
           targetLocked: false,
           isSubmitted: false
@@ -65,6 +67,7 @@ export const RoomStore = {
     room.players.push(socketId);
     room.playerStates[socketId] = {
       bios: 25,
+      wins: 0,
       numberHand: [],
       targetLocked: false,
       isSubmitted: false

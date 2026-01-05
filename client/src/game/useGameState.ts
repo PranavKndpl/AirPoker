@@ -30,10 +30,13 @@ export interface GameState {
   targetValue: number;
   currentSum: number;
 
-  opponentLocked: boolean; // <--- NEW
+  opponentLocked: boolean; 
   opponentTargetValue: number;
 
-  myLocked: boolean; // <--- NEW
+  myLocked: boolean; 
+
+  myWins: number;       // <--- NEW
+  opponentWins: number; // <--- NEW
   
 }
 
@@ -60,12 +63,13 @@ export const useGameState = () => {
   const [roundResult, setRoundResult] = useState<any>(null);
   const [gameOver, setGameOver] = useState<any>(null);
 
-  // --- NEW: Track if opponent locked their target
   const [opponentLocked, setOpponentLocked] = useState(false);
   const [opponentTargetValue, setOpponentTargetValue] = useState(0);
 
-  // --- NEW: Track if I locked my target
   const [myLocked, setMyLocked] = useState(false);
+
+  const [myWins, setMyWins] = useState(0);             // <--- NEW
+  const [opponentWins, setOpponentWins] = useState(0); // <--- NEW
 
   // 1. SOCKET EVENTS
 useSocketEvents({
@@ -85,7 +89,9 @@ useSocketEvents({
     setGameOver,
     setOpponentLocked,
     setOpponentTargetValue,
-    setMyLocked
+    setMyLocked,
+    setMyWins,       
+    setOpponentWins  
   });
 
   // 2. LOCAL TIMER
@@ -140,10 +146,13 @@ useSocketEvents({
       targetValue,
       currentSum,
 
-      opponentLocked, // <--- EXPOSE
+      opponentLocked, 
       opponentTargetValue,
 
-      myLocked // <--- EXPOSE
+      myLocked,
+      
+      myWins,       
+      opponentWins, 
     },
 
     setLocalStep,
