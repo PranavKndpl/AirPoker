@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react'; // Add useRef, useEffect
+// client/src/components/Game/NumberCard3D.tsx
+import React, { useState, useEffect, useRef } from 'react'; 
 import { useSpring, animated } from '@react-spring/three';
-import { Text } from '@react-three/drei';
+import { useTexture, Text } from '@react-three/drei';
 
 interface NumberCardProps {
   value: number;
@@ -8,46 +9,53 @@ interface NumberCardProps {
   isSelected?: boolean;
   isUsed?: boolean;
   onClick?: () => void;
+  isOpponentView?: boolean;
 }
 
-export const NumberCard3D: React.FC<NumberCardProps> = ({ value, position, isSelected, isUsed, onClick }) => {
+export const NumberCard3D: React.FC<NumberCardProps> = ({ 
+  value, position, isSelected, isUsed, onClick 
+}) => {
   const [hovered, setHover] = useState(false);
   
-  // 1. Detect Reveal (0 -> Number)
+  // Textures
+  const frontTexture = useTexture('/card_front.png');
+  const backTexture = useTexture('/card_back.png');
+
+  frontTexture.flipY = false;
+  backTexture.flipY = false;
+  frontTexture.colorSpace = "srgb";
+  backTexture.colorSpace = "srgb";
+
   const [isRevealing, setRevealing] = useState(false);
   const prevValue = useRef(value);
 
   useEffect(() => {
-    // If value was 0 and is now Real, trigger animation
     if (prevValue.current === 0 && value > 0) {
       setRevealing(true);
-      // Stop animation after 1 second
       const t = setTimeout(() => setRevealing(false), 1000);
       return () => clearTimeout(t);
     }
     prevValue.current = value;
   }, [value]);
 
-  // 2. Spring Physics
-  const { pos, rot, color, scale } = useSpring({
-    // POSITION: If revealing, jump up high (y+1.5). If selected, lift a bit (y+0.2).
+  const showBack = value === 0; 
+  
+  // ✅ FIX 1: Updated Local Font Path
+  const fontUrl = "/Cinzel/static/Cinzel-Regular.ttf"; 
+
+  const { pos, rot, scale } = useSpring({
     pos: isRevealing 
        ? [position[0], position[1] + 1.5, position[2]] 
        : isSelected 
-          ? [position[0], position[1] + 0.2, position[2]] 
+          ? [position[0], position[1] + 0.4, position[2]] 
           : position,
-          
-    // ROTATION: If revealing, do a 360 spin on Z axis (which looks like a flip on the table)
     rot: isRevealing 
        ? [-Math.PI / 2, 0, Math.PI * 2] 
-       : [-Math.PI / 2, 0, 0],
-       
-    // SCALE: Pulse slightly when revealing
+       : showBack 
+          ? [Math.PI / 2, 0, 0]  
+          : [-Math.PI / 2, 0, 0], 
     scale: isRevealing ? 1.2 : (hovered && !isUsed ? 1.1 : 1),
-
-    color: isUsed ? '#333' : (isSelected ? '#ffaa00' : '#880000'),
-    
-    config: { tension: 120, friction: 14 } // Bouncy spring
+    config: { tension: 120, friction: 14 }
   });
 
   return (
@@ -55,33 +63,66 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({ value, position, isSel
       position={pos as any} 
       rotation={rot as any} 
       scale={scale}
-      onClick={!isUsed ? onClick : undefined}
-      onPointerOver={() => !isUsed && setHover(true)}
-      onPointerOut={() => setHover(false)}
     >
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={[1.4, 2.0, 0.02]} />
-        <animated.meshStandardMaterial color={color} roughness={0.3} metalness={0.6} />
+      <mesh 
+        castShadow 
+        receiveShadow
+        onClick={(e) => {
+          if (!isUsed && onClick) {
+            e.stopPropagation();
+            onClick();
+          }
+        }}
+        onPointerOver={() => !isUsed && setHover(true)}
+        onPointerOut={() => setHover(false)}
+      >
+        <boxGeometry args={[1.4, 2.0, 0.05]} />
+        
+        {/* SIDES */}
+        <meshStandardMaterial attach="material-0" color="#ceb064" metalness={1.0} roughness={0.2} />
+        <meshStandardMaterial attach="material-1" color="#ceb064" metalness={1.0} roughness={0.2} />
+        <meshStandardMaterial attach="material-2" color="#ceb064" metalness={1.0} roughness={0.2} />
+        <meshStandardMaterial attach="material-3" color="#ceb064" metalness={1.0} roughness={0.2} />
+
+        {/* FRONT */}
+        <meshStandardMaterial 
+          attach="material-4" 
+          map={frontTexture} 
+          color="#ffffff" 
+          metalness={0.1} 
+          roughness={0.8}
+        />
+        
+        {/* ✅ FIX 2: CHANGED TO STANDARD MATERIAL 
+            This allows it to be dark (affected by lights) instead of glowing white. 
+        */}
+        <meshStandardMaterial 
+            attach="material-5" 
+            map={backTexture} 
+            color="#bbbbbb" // Slightly dim the white texture
+            metalness={0.1}
+            roughness={0.8}
+        />
       </mesh>
 
-      <group position={[0, 0, 0.02]}>
-         {/* TEXT LOGIC */}
-         {value > 0 ? (
-            <Text fontSize={0.8} color="white" anchorX="center" anchorY="middle">
-            {value}
-            </Text>
-         ) : (
-            <Text fontSize={1.0} color="#444" anchorX="center" anchorY="middle">
-              ?
-            </Text>
-         )}
-         
-         {value > 0 && (
-           <Text position={[0, -0.6, 0]} fontSize={0.15} color="#ffffff80">
-             TARGET
+      {/* TEXT */}
+      {!showBack && (
+        <group position={[0, 0, 0.04]}> 
+           <Text
+             font={fontUrl}       
+             fontSize={0.55}      
+             color="#2a1a0a"
+             anchorX="center"
+             anchorY="middle"
+             outlineWidth={0.02}
+             outlineColor="#8a6d3b"
+             position={[0, 0, 0]}   
+             fillOpacity={0.9}
+           >
+             {value}
            </Text>
-         )}
-      </group>
+        </group>
+      )}
     </animated.group>
   );
 };

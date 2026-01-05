@@ -15,6 +15,29 @@ const OXYGEN_DECAY_INTERVAL = 60; // every 60 ticks, 1 Bio lost
 /* ------------------------ START ROUND ----------------------------- */
 /* ------------------------------------------------------------------ */
 export const startRound = (room: Room, io: Server) => {
+  // ---------------- 🛑 1. SAFETY CHECK (NEW) ----------------
+  // If a player left, we cannot start a round. Declare the survivor the winner.
+  if (room.players.length < 2) {
+    console.log(`[ROUND ABORT] Room ${room.id} - Insufficient players.`);
+    
+    const survivor = room.players[0];
+    if (survivor) {
+        io.to(survivor).emit("round_result", {
+            result: { outcome: "WIN", hands: {} }, // Technical win
+            gameOver: {
+                winner: survivor,
+                reason: "OPPONENT_DISCONNECT",
+                // Safe access to stats
+                finalBios: room.playerStates[survivor] 
+                  ? { [survivor]: room.playerStates[survivor].bios } 
+                  : {}
+            }
+        });
+    }
+    
+    room.phase = "GAME_OVER";
+    return; // <--- STOP EXECUTION TO PREVENT CRASH
+  }
   // ---------------- ROUND LIMIT CHECK ----------------
   if (room.roundCount >= 5) {
     console.log(`[GAME OVER] Room ${room.id} limit reached`);

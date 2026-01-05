@@ -150,6 +150,8 @@ const handleRoundResult = (data: any) => {
   const opTargets = data.opponentTargets || {};
   const actualOpponentTarget = opTargets[opponentId] ?? 0;
 
+  const myTargetValue = opTargets[myId] ?? 0;
+
   const playerHand = hands[myId];
   const opponentHand = hands[opponentId];
 
@@ -157,7 +159,8 @@ const handleRoundResult = (data: any) => {
     outcome: myOutcome,
     playerHand,
     opponentHand,
-    opponentTargetValue: actualOpponentTarget
+    opponentTargetValue: actualOpponentTarget,
+    myTargetValue: myTargetValue
   });
 
   if (Array.isArray(data.updatedDeck)) {

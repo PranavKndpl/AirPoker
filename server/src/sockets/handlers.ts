@@ -17,7 +17,17 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
     socket.emit("room_created", { roomId: room.id });
   });
 
+// server/src/sockets/handlers.ts
+
   socket.on("join_room", ({ roomId }) => {
+    // 1. LEAVE ALL PREVIOUS ROOMS (Fix for the clock bug)
+    // socket.rooms is a Set containing the socket ID and any rooms it is in.
+    // We want to leave everything except its own default room (socket.id).
+    socket.rooms.forEach(r => {
+      if (r !== socket.id) socket.leave(r);
+    });
+
+    // 2. LOGIC AS BEFORE
     const room = RoomStore.joinRoom(socket.id, roomId);
     if (!room) {
       console.warn(`${logPrefix} Failed to join room ${roomId}`);
@@ -33,9 +43,31 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
     }
   });
 
+  // server/src/sockets/handlers.ts
+
   socket.on("disconnect", () => {
     console.warn(`${logPrefix} Disconnected`);
+    
+    // 1. Get room BEFORE removing player so we know where they were
+    const room = RoomStore.getRoomByPlayer(socket.id);
+    
+    // 2. Remove player
     RoomStore.removePlayer(socket.id);
+
+    // 3. Notify remaining player if game was in progress
+    if (room && room.players.length > 0) {
+        const survivor = room.players[0];
+        io.to(survivor).emit("round_result", {
+            result: { outcome: "WIN", hands: {} },
+            gameOver: {
+                winner: survivor,
+                reason: "OPPONENT_DISCONNECT",
+                finalBios: {}
+            }
+        });
+        // Force update the room phase so no new rounds start
+        room.phase = "GAME_OVER";
+    }
   });
 
   /* -------------------------------------------------- */

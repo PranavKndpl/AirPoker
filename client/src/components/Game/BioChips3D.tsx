@@ -1,44 +1,37 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useTexture } from '@react-three/drei';
-import * as THREE from 'three';
 
 interface ChipProps {
   position: [number, number, number];
-  texture: THREE.Texture; // Pass the loaded texture down
+  texture: any;
 }
 
 const SingleChip: React.FC<ChipProps> = ({ position, texture }) => {
-  // Random rotation so the "Bios" text isn't perfectly aligned like a robot stacked them
-  const randomRot = useRef(Math.random() * Math.PI * 2);
-
-  {/* The Latch Mechanism detail */}
-    <mesh position={[0.35, 0, 0]} castShadow>
-    <boxGeometry args={[0.1, 0.08, 0.1]} />
-    <meshStandardMaterial color="#b8860b" metalness={0.9} roughness={0.2} />
-    </mesh>
+  // Add slight random rotation so the stack looks natural, not robotic
+  const rotation = useMemo(() => [0, Math.random() * Math.PI, 0], []);
 
   return (
-    <mesh position={position} rotation={[0, randomRot.current, 0]} castShadow receiveShadow>
-      {/* slightly thicker cylinder to match the beefy look of your reference image */}
-      <cylinderGeometry args={[0.35, 0.35, 0.1, 32]} />
-      
-      {/* MATERIAL 0: SIDE (Gold Metal) */}
-      <meshStandardMaterial attach="material-0" color="#ffcc00" roughness={0.2} metalness={0.9} />
-      
-      {/* MATERIAL 1: TOP (Your Image) */}
-      <meshStandardMaterial attach="material-1" map={texture} roughness={0.5} metalness={0.4} />
-      
-      {/* MATERIAL 2: BOTTOM (Gold Metal) */}
-      <meshStandardMaterial attach="material-2" color="#ffcc00" roughness={0.2} metalness={0.9} />
-    </mesh>
+    <group position={position} rotation={rotation as any}>
+      <mesh castShadow receiveShadow>
+        {/* BIGGER SIZE: Radius 0.55 (was 0.35), Height 0.12 (was 0.08) */}
+        <cylinderGeometry args={[0.55, 0.55, 0.12, 48]} />
+        
+        {/* SIDE: Gold Metal - High Polish */}
+        <meshStandardMaterial attach="material-0" color="#ffcc00" metalness={1.0} roughness={0.15} />
+        
+        {/* TOP: Texture with detail */}
+        <meshStandardMaterial attach="material-1" map={texture} roughness={0.3} metalness={0.4} />
+        
+        {/* BOTTOM: Gold */}
+        <meshStandardMaterial attach="material-2" color="#ffcc00" metalness={1.0} roughness={0.15} />
+      </mesh>
+    </group>
   );
 };
 
 export const BioChips3D: React.FC<{ count: number; position: [number, number, number] }> = ({ count, position }) => {
-  // Load texture once for the whole stack (Optimization)
-  const biosTexture = useTexture('/bios_texture.png'); // Make sure this file is in /public
-  
-  // Create the stack array
+  const texture = useTexture('/bios_chip.png');
+
   const chips = useMemo(() => Array.from({ length: count }), [count]);
 
   return (
@@ -46,8 +39,9 @@ export const BioChips3D: React.FC<{ count: number; position: [number, number, nu
       {chips.map((_, i) => (
         <SingleChip 
           key={i} 
-          position={[0, i * 0.11, 0]} // Stack height
-          texture={biosTexture} 
+          // Increased spacing to 0.13 to account for thicker chips
+          position={[0, i * 0.13, 0]} 
+          texture={texture} 
         />
       ))}
     </group>

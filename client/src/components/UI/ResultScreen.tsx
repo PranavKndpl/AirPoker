@@ -14,6 +14,7 @@ interface RoundResult {
   playerHand?: HandInfo;
   opponentHand?: HandInfo;
   opponentTargetValue?: number;
+  myTargetValue?: number;
 }
 
 interface ResultScreenProps {
@@ -124,6 +125,11 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound,
                   />
                ))}
             </div>
+            <div style={targetUsedStyle}>
+               TARGET: <span style={{color: '#ffd700', fontSize: '1.2rem'}}>
+                 {result.myTargetValue ? result.myTargetValue : "-"}
+               </span>
+            </div>
           </div>
 
           {/* --- VS --- */}
@@ -155,7 +161,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound,
             </div>
 
             <div style={targetUsedStyle}>
-               TARGET: <span style={{color: '#fff', fontSize: '1.2rem'}}>{opponentTargetValue}</span>
+               TARGET: <span style={{color: '#fff', fontSize: '1.2rem'}}>{opponentTargetValue ? opponentTargetValue: "-"}</span> 
             </div>
           </div>
         </div>
