@@ -8,6 +8,7 @@ import { GameScene } from "./components/Scene/GameScene";
 import { GameHUD } from "./components/UI/GameHUD";
 import { GameOverlays } from "./components/UI/GameOverlays";
 import { ActiveTurnPanel } from "./components/UI/ActiveTurnPanel";
+import { ToastNotification } from "./components/UI/ToastNotification"; // ✅ 1. Import Toast
 
 export default function App() {
   const {
@@ -16,7 +17,8 @@ export default function App() {
     setSelectedTargetId,
     setSelectedCardIds,
     openTableView,
-    closeTableView
+    closeTableView,
+    setPhase
   } = useGameState();
 
   const actions = useGameActions({
@@ -28,37 +30,37 @@ export default function App() {
     selectedTargetId: state.selectedTargetId,
     setSelectedTargetId,
     selectedCardIds: state.selectedCardIds,
-    setSelectedCardIds
+    setSelectedCardIds,
+    gameOver: state.gameOver, 
+    setPhase: setPhase
   });
 
   return (
     <div style={rootStyle}>
       
       {/* 1. GLOBAL OVERLAYS (Lobby, Results, Game Over, Waiting) */}
-      {/* This now handles the "True Winner" screen automatically via state.gameOver */}
       <GameOverlays state={state} actions={actions} />
 
-      {/* 2. 3D GAME WORLD */}
+      {/* ✅ 2. NEW: ADD TOAST NOTIFICATION HERE */}
+      <ToastNotification />
+
+      {/* 3. 3D GAME WORLD */}
       <GameScene
         phase={state.phase}
         localStep={state.localStep}
-        
         myNumberHand={state.myNumberHand}
         selectedTargetId={state.selectedTargetId}
         selectedCardIds={state.selectedCardIds}
         globalDeck={state.globalDeck}
-        
         targetValue={state.targetValue}
-        opponentTargetValue={state.opponentTargetValue} // Now updates dynamically
-        
+        opponentTargetValue={state.opponentTargetValue}
         bios={state.bios}
         opponentBios={state.opponentBios}
-        
         onTargetClick={(id) => actions.selectTarget(id)}
         opponentLocked={state.opponentLocked}
       />
 
-      {/* 3. HEADS UP DISPLAY (Updated with Match Scores) */}
+      {/* 4. HEADS UP DISPLAY */}
       <GameHUD
         roomId={state.roomId}
         timer={state.timer}
@@ -66,16 +68,17 @@ export default function App() {
         bios={state.bios}
         opponentBios={state.opponentBios}
         phase={state.phase}
-        
-        // 🏆 NEW: Pass Match Score to HUD
         myWins={state.myWins} 
         opponentWins={state.opponentWins}
+        
+        // ✅ 3. NEW: PASS OXYGEN PROGRESS HERE
+        oxygenProgress={state.oxygenProgress}
       />
 
-      {/* 4. ACTIVE TURN UI (Betting / Hand Selection) */}
+      {/* 5. ACTIVE TURN UI */}
       <ActiveTurnPanel state={state} actions={actions} />
 
-      {/* 5. VIEW TABLE TOGGLE (Floating Button) */}
+      {/* 6. VIEW TABLE TOGGLE */}
       {state.overlay === "VIEW_TABLE" && state.phase === "GAME_LOOP" && (
         <div style={floatingBtnContainer}>
           <button onClick={actions.toggleViewTable} style={returnBtnStyle}>

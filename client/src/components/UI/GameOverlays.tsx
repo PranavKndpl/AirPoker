@@ -29,7 +29,8 @@ export const GameOverlays: React.FC<OverlayProps> = ({ state, actions }) => {
     return (
       <ResultScreen
         result={state.roundResult}
-        onNextRound={actions.requestNextRound}
+        onNextRound={actions.nextRound}
+        isMatchOver={!!state.gameOver}
       />
     );
   }

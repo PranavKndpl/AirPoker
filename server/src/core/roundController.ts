@@ -5,23 +5,27 @@ import { resolveRound } from "./rules";
 import { Server } from "socket.io";
 import { PlayingCard } from "../../../shared/types";
 
-const ROUND_TIME_SEC = 60;
+/* ------------------------------------------------------------------ */
+/* ------------------------ CONFIGURATION --------------------------- */
+/* ------------------------------------------------------------------ */
+const ROUND_TIME_SEC = 90;
+const OXYGEN_DECAY_INTERVAL = 60; // every 60 ticks, 1 Bio lost
 
 /* ------------------------------------------------------------------ */
-/* ---------------------------- START ROUND ------------------------- */
+/* ------------------------ START ROUND ----------------------------- */
 /* ------------------------------------------------------------------ */
 export const startRound = (room: Room, io: Server) => {
-  /* ---------------- ROUND LIMIT CHECK ---------------- */
+  // ---------------- ROUND LIMIT CHECK ----------------
   if (room.roundCount >= 5) {
     console.log(`[GAME OVER] Room ${room.id} limit reached`);
-
     const [p1, p2] = room.players;
     const b1 = room.playerStates[p1]?.bios ?? 0;
     const b2 = room.playerStates[p2]?.bios ?? 0;
 
-    let winner: string | null = null;
-    if (b1 > b2) winner = p1;
-    else if (b2 > b1) winner = p2;
+    const winner =
+      b1 > b2 ? p1 :
+      b2 > b1 ? p2 :
+      null;
 
     io.to(room.id).emit("round_result", {
       result: { outcome: "DRAW", hands: {} },
@@ -36,40 +40,71 @@ export const startRound = (room: Room, io: Server) => {
     return;
   }
 
-  /* ---------------- NORMAL ROUND START --------------- */
+  // ---------------- NORMAL ROUND START ----------------
   room.roundCount++;
   console.log(`[ROUND START] Room ${room.id} | Round ${room.roundCount}/5`);
-
   room.phase = "GAME_LOOP";
   room.turnData = {};
   room.pot = 0;
 
+  // ---------------- DECK INIT ----------------
   if (room.globalDeck.length === 0) {
     console.log(`[DECK INIT] Creating new deck for room ${room.id}`);
     room.globalDeck = createDeck();
   }
 
+  // ---------------- TIMER RESET ----------------
   if (room.timer) {
     clearInterval(room.timer);
     room.timer = undefined;
   }
 
+  // ---------------- OXYGEN INIT ----------------
+  if ((room as any).oxygenTick === undefined) {
+    (room as any).oxygenTick = 0;
+  }
+
+  // ---------------- ANTE PHASE ----------------
+  let anteDeath = false;
+
+  room.players.forEach(pid => {
+    const p = room.playerStates[pid];
+
+    // Deduct 1 Bio for ante
+    if (p.bios > 0) {
+      p.bios -= 1;
+      room.pot += 1;
+    }
+
+    // Check if player died from ante
+    if (p.bios <= 0) anteDeath = true;
+  });
+
+  // Emit notification once
+  setTimeout(() => {
+    io.to(room.id).emit("notification", { message: "Ante Paid: -1 Bios", type: "ANTE" });
+  }, 1500);
+
+  // If someone died from ante, resolve round immediately
+  if (anteDeath) {
+    console.log(`[ANTE DEATH] Room ${room.id} - Resolving immediately`);
+    endRound(room, io, "NORMAL");
+    return;
+  }
+
+  // ---------------- PLAYER SETUP ----------------
   room.players.forEach(pid => {
     const p = room.playerStates[pid];
     p.isSubmitted = false;
     p.targetLocked = false;
-    if (room.roundCount === 1) {
-       p.numberHand = generateNumberHand();
-    }
 
-    if (p.bios > 0) {
-      p.bios -= 1;
-      room.pot += 1;
-    } else {
-      console.warn(`[AIR WARNING] Player ${pid} started round with 0 bios`);
+    // Generate number hand only on first round
+    if (room.roundCount === 1) {
+      p.numberHand = generateNumberHand();
     }
   });
 
+  // ---------------- EMIT ROUND START ----------------
   room.players.forEach(pid => {
     const opponentId = room.players.find(p => p !== pid)!;
     io.to(pid).emit("new_round_start", {
@@ -83,11 +118,13 @@ export const startRound = (room: Room, io: Server) => {
     });
   });
 
+  // ---------------- START TIMER ----------------
   startTimer(room, io);
 };
 
+
 /* ------------------------------------------------------------------ */
-/* ---------------------------- TIMER -------------------------------- */
+/* -------------------------- TIMER LOGIC --------------------------- */
 /* ------------------------------------------------------------------ */
 const startTimer = (room: Room, io: Server) => {
   let timeLeft = ROUND_TIME_SEC;
@@ -96,11 +133,57 @@ const startTimer = (room: Room, io: Server) => {
   room.timer = setInterval(() => {
     timeLeft--;
 
-    if (timeLeft % 10 === 0) {
+    // ---------------- TIMER SYNC ----------------
+    if (timeLeft % 10 === 0 || timeLeft <= 10) {
       io.to(room.id).emit("timer_sync", timeLeft);
       console.log(`[TIMER] Room ${room.id}: ${timeLeft}s left`);
     }
 
+    // ---------------- OXYGEN TICK ----------------
+    (room as any).oxygenTick = ((room as any).oxygenTick || 0) + 1;
+    const currentTick = (room as any).oxygenTick;
+
+    // Smooth client bar update
+    io.to(room.id).emit("oxygen_sync", currentTick % OXYGEN_DECAY_INTERVAL);
+
+    // Deduct 1 Bio every 60 ticks
+    if (currentTick % OXYGEN_DECAY_INTERVAL === 0) {
+      console.log(`[OXYGEN] Room ${room.id} decay triggered`);
+
+      room.players.forEach(pid => {
+        const p = room.playerStates[pid];
+        if (p.bios > 0) p.bios -= 1;
+      });
+
+      // Update clients
+      io.to(room.id).emit("economy_update", {
+        bios: room.players.reduce((acc, pid) => {
+          acc[pid] = room.playerStates[pid].bios;
+          return acc;
+        }, {} as Record<string, number>),
+        pot: room.pot
+      });
+
+      io.to(room.id).emit("notification", {
+        message: "Oxygen Low: -1 Bio",
+        type: "DECAY"
+      });
+
+      // 🚨 MUST HAVE THIS CHECK:
+      const hasDeath = room.players.some(
+        pid => room.playerStates[pid].bios <= 0
+      );
+
+      if (hasDeath) {
+        console.log(`[OXYGEN DEATH] Room ${room.id} - Resolving immediately`);
+        clearInterval(room.timer!);
+        room.timer = undefined;
+        endRound(room, io, "NORMAL"); // This sends the BANKRUPTCY reason
+        return;
+      }
+    }
+
+    // ---------------- TIMEOUT ----------------
     if (timeLeft <= 0) {
       console.warn(`[TIMEOUT] Room ${room.id} forcing resolution`);
       clearInterval(room.timer!);
@@ -110,31 +193,24 @@ const startTimer = (room: Room, io: Server) => {
   }, 1000);
 };
 
+
 /* ------------------------------------------------------------------ */
-/* ------------------------ RANK CLASH LOGIC ------------------------- */
+/* ------------------------ RANK CLASH LOGIC ------------------------ */
 /* ------------------------------------------------------------------ */
-const handleRankClash = (
-  room: Room,
-  p1Cards: PlayingCard[],
-  p2Cards: PlayingCard[]
-) => {
+const handleRankClash = (room: Room, p1Cards: PlayingCard[], p2Cards: PlayingCard[]) => {
   if (!p1Cards.length || !p2Cards.length) return;
 
   const p1Ranks = new Set(p1Cards.map(c => c.rank));
   const p2Ranks = new Set(p2Cards.map(c => c.rank));
   const commonRanks = [...p1Ranks].filter(r => p2Ranks.has(r));
 
-  if (commonRanks.length === 0) return;
+  if (!commonRanks.length) return;
 
   console.log(`[CLASH] Room ${room.id} - Ranks: ${commonRanks.join(", ")}`);
 
   const activeIds = new Set([...p1Cards, ...p2Cards].map(c => c.id));
-
   const cardsToBurn = room.globalDeck.filter(
-    c =>
-      commonRanks.includes(c.rank) &&
-      c.usedBy === null &&
-      !activeIds.has(c.id)
+    c => commonRanks.includes(c.rank) && c.usedBy === null && !activeIds.has(c.id)
   );
 
   if (!cardsToBurn.length) {
@@ -144,19 +220,13 @@ const handleRankClash = (
 
   const ids = cardsToBurn.map(c => c.id);
   burnCards(room.globalDeck, ids, "RANK_CLASH");
-  console.log(
-    `[CLASH BURN] Burned ${ids.length} extra cards (Rank ${commonRanks.join(",")})`
-  );
+  console.log(`[CLASH BURN] Burned ${ids.length} extra cards (Rank ${commonRanks.join(",")})`);
 };
 
 /* ------------------------------------------------------------------ */
-/* -------------------------- RESOLUTION ----------------------------- */
+/* -------------------------- END ROUND ----------------------------- */
 /* ------------------------------------------------------------------ */
-export const endRound = (
-  room: Room,
-  io: Server,
-  reason: "NORMAL" | "TIMEOUT"
-) => {
+export const endRound = (room: Room, io: Server, reason: "NORMAL" | "TIMEOUT") => {
   if (room.players.length < 2) {
     console.warn(`[ABORT END] Room ${room.id} has insufficient players`);
     if (room.timer) clearInterval(room.timer);
@@ -194,14 +264,14 @@ export const endRound = (
 
   console.log(`[RESOLUTION] Room ${room.id}:`, JSON.stringify(result));
 
-  /* -------- Rank Clash -------- */
+  // ---------------- RANK CLASH ----------------
   const p1Cards = result.hands[p1]?.cards || [];
   const p2Cards = result.hands[p2]?.cards || [];
   if (p1Cards.length && p2Cards.length) {
     handleRankClash(room, p1Cards, p2Cards);
   }
 
-  /* -------- Payout & Win Count -------- */
+  // ---------------- PAYOUT & WIN COUNT ----------------
   const winner =
     result.outcome === "WIN" ? p1 :
     result.outcome === "LOSE" ? p2 :
@@ -213,19 +283,18 @@ export const endRound = (
     console.log(`[PAYOUT] Player ${winner} wins pot & round point`);
   }
 
-  /* -------- Burn Played Cards -------- */
+  // ---------------- BURN PLAYED CARDS ----------------
   const playedIds = [
     ...(room.turnData[p1]?.cardIds || []),
     ...(room.turnData[p2]?.cardIds || [])
   ];
-
   if (playedIds.length) {
     const uniqueIds = [...new Set(playedIds)];
     burnCards(room.globalDeck, uniqueIds);
     console.log(`[BURN] Room ${room.id} burned ${uniqueIds.length} cards (Played)`);
   }
 
-  /* -------- Match End Conditions -------- */
+  // ---------------- MATCH END CONDITIONS ----------------
   let gameOver: any = null;
 
   if (p1State.bios <= 0) {
@@ -248,7 +317,7 @@ export const endRound = (
     room.phase = "GAME_OVER";
   }
 
-  /* -------- Target Values -------- */
+  // ---------------- TARGET VALUES ----------------
   const targetValues: Record<string, number> = {};
   [p1, p2].forEach(pid => {
     const tid = room.turnData[pid]?.targetId;
@@ -256,20 +325,16 @@ export const endRound = (
     targetValues[pid] = card ? card.value : 0;
   });
 
-  /* -------- MARK TARGETS AS USED -------- */
+  // ---------------- MARK TARGETS AS USED ----------------
   [p1, p2].forEach(pid => {
     const targetId = room.turnData[pid]?.targetId;
-
     if (targetId) {
       const cardIndex = room.playerStates[pid].numberHand.findIndex(c => c.id === targetId);
-
-      if (cardIndex !== -1) {
-        room.playerStates[pid].numberHand[cardIndex].isUsed = true;
-      }
+      if (cardIndex !== -1) room.playerStates[pid].numberHand[cardIndex].isUsed = true;
     }
   });
 
-  /* -------- EMIT ROUND RESULT -------- */
+  // ---------------- EMIT ROUND RESULT ----------------
   io.to(room.id).emit("round_result", {
     result,
     updatedDeck: room.globalDeck,
@@ -281,7 +346,7 @@ export const endRound = (
 };
 
 /* ------------------------------------------------------------------ */
-/* --------------------- NUMBER HAND FACTORY ------------------------- */
+/* --------------------- NUMBER HAND FACTORY ------------------------ */
 /* ------------------------------------------------------------------ */
 const generateNumberHand = () => {
   return Array.from({ length: 5 }, () => ({

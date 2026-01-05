@@ -19,6 +19,7 @@ interface RoundResult {
 interface ResultScreenProps {
   result: RoundResult;
   onNextRound: () => void;
+  isMatchOver?: boolean;
 }
 
 /* --- MINI CARD (Updated Visuals) --- */
@@ -62,7 +63,7 @@ const MiniCard = ({
 };
 
 /* --- MAIN SCREEN --- */
-export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound }) => {
+export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound, isMatchOver }) => {
   // 1. SAFETY CHECK: If result is null, don't crash
   if (!result) return null;
 
@@ -160,7 +161,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({ result, onNextRound 
         </div>
 
         <button onClick={onNextRound} style={btnStyle}>
-          NEXT ROUND
+          {isMatchOver ? "FINISH MATCH" : "NEXT ROUND"}
         </button>
       </div>
     </div>

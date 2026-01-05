@@ -24,9 +24,9 @@ interface SocketEventHandlers {
   setMyLocked: any;
   setMyWins: any;
   setOpponentWins: any;
+  setOxygenProgress: (val: number) => void;
 }
 
-// ⚡️ REFACTOR: Accept a single 'handlers' object
 export const useSocketEvents = (handlers: SocketEventHandlers) => {
   const {
     setRoomId,
@@ -47,7 +47,8 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
     setOpponentTargetValue,
     setMyLocked,
     setMyWins,
-    setOpponentWins
+    setOpponentWins,
+    setOxygenProgress
   } = handlers;
 
   useEffect(() => {
@@ -109,46 +110,80 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
       setLocalStep(LocalStep.BETTING);
     };
 
-    const handleRoundResult = (data: any) => {
-      const winsData = data.updatedWins || {};
-      // Update global wins if handler exists
-      if (setMyWins && setOpponentWins) {
-        const myId = socket.id!;
-        const opponentId = Object.keys(winsData).find(id => id !== myId);
-        setMyWins(winsData[myId] ?? 0);
-        setOpponentWins(opponentId ? winsData[opponentId] ?? 0 : 0);
-      }
+const handleRoundResult = (data: any) => {
+  const myId = socket.id!;
 
-      const result = data.result || {};
-      const myId = socket.id!;
-      const [p1, p2] = Object.keys(result.hands);
-      const opponentId = myId === p1 ? p2 : p1;
+  // 1. UPDATE DATA STORES
+  const winsData = data.updatedWins || {};
+  if (setMyWins && setOpponentWins) {
+    const opponentId = Object.keys(winsData).find(id => id !== myId);
+    setMyWins(winsData[myId] ?? 0);
+    setOpponentWins(opponentId ? winsData[opponentId] ?? 0 : 0);
+  }
 
-      const myOutcome = result.outcome === "DRAW" ? "DRAW"
-        : (result.outcome === "WIN" && myId === p1) || (result.outcome === "LOSE" && myId === p2)
-        ? "WIN" : "LOSE";
+  // 2. CHECK FOR INSTANT DEATH (New Logic)
+  if (data.gameOver) {
+    setGameOver(data.gameOver); // Store it first
 
-      const opTargets = data.opponentTargets || {};
-      const actualOpponentTarget = opTargets[opponentId] ?? 0;
+    // 🚨 OVERRIDE: If someone died (Bankruptcy), skip the result screen immediately.
+    if (data.gameOver.reason === "BANKRUPTCY") {
+      console.log("[CLIENT] Bankruptcy detected - skipping to Game Over");
+      setPhase("GAME_OVER");
+      return; // <--- STOP EXECUTION HERE
+    }
+  }
 
-      setRoundResult({
-        outcome: myOutcome,
-        playerHand: result.hands[myId],
-        opponentHand: result.hands[opponentId],
-        opponentTargetValue: actualOpponentTarget
-      });
-      setPhase("RESOLUTION");
+  // 3. NORMAL RESULT PROCESSING (If we didn't die instantly)
+  const result = data.result || {};
+  const hands = result.hands || {};
+  const [p1, p2] = Object.keys(hands);
+  const opponentId = myId === p1 ? p2 : p1;
 
-      if (Array.isArray(data.updatedDeck)) setGlobalDeck(data.updatedDeck);
+  const myOutcome =
+    result.outcome === "DRAW"
+      ? "DRAW"
+      : (result.outcome === "WIN" && myId === p1) ||
+        (result.outcome === "LOSE" && myId === p2)
+      ? "WIN"
+      : "LOSE";
 
-      const biosData = data.updatedBios || {};
-      if (socket.id && biosData[socket.id] !== undefined) {
-        setBios(biosData[socket.id]);
-        setOpponentBios(biosData[opponentId]);
-      }
+  const opTargets = data.opponentTargets || {};
+  const actualOpponentTarget = opTargets[opponentId] ?? 0;
 
-      if (data.gameOver) setGameOver(data.gameOver);
-    };
+  const playerHand = hands[myId];
+  const opponentHand = hands[opponentId];
+
+  setRoundResult({
+    outcome: myOutcome,
+    playerHand,
+    opponentHand,
+    opponentTargetValue: actualOpponentTarget
+  });
+
+  if (Array.isArray(data.updatedDeck)) {
+    setGlobalDeck(data.updatedDeck);
+  }
+
+  const biosData = data.updatedBios || {};
+  if (biosData[myId] !== undefined) {
+    setBios(biosData[myId]);
+    setOpponentBios(biosData[opponentId]);
+  }
+
+  // 4. CHECK FOR EMPTY HANDS (The fix from previous step)
+  // If the match ended by Dominance (3 wins), but no cards were played this round
+  if (data.gameOver) {
+    const myHandCards = playerHand?.cards || [];
+    if (myHandCards.length === 0) {
+      setPhase("GAME_OVER");
+      return;
+    }
+  }
+
+  setPhase("RESOLUTION");
+};
+
+
 
     const handleStatusUpdate = (data: { playerId: string; status: string }) => {
       if (data.status === "TARGET_LOCKED") {
@@ -160,25 +195,34 @@ export const useSocketEvents = (handlers: SocketEventHandlers) => {
       }
     };
 
-    /* ------------------- LISTENERS ------------------- */
-    socket.on("room_created", handleRoomCreated);
-    socket.on("new_round_start", handleNewRound);
-    socket.on("timer_sync", handleTimerSync);
-    socket.on("economy_update", handleEconomyUpdate);
-    socket.on("round_result", handleRoundResult);
-    socket.on("player_status_update", handleStatusUpdate);
-    socket.on("reveal_targets", handleReveal);
-    socket.on("start_betting_phase", handleStartBetting);
+/* ------------------- LISTENERS ------------------- */
+socket.on("room_created", handleRoomCreated);
+socket.on("new_round_start", handleNewRound);
+socket.on("timer_sync", handleTimerSync);
+socket.on("economy_update", handleEconomyUpdate);
+socket.on("round_result", handleRoundResult);
+socket.on("player_status_update", handleStatusUpdate);
+socket.on("reveal_targets", handleReveal);
+socket.on("start_betting_phase", handleStartBetting);
 
-    return () => {
-      socket.off("room_created", handleRoomCreated);
-      socket.off("new_round_start", handleNewRound);
-      socket.off("timer_sync", handleTimerSync);
-      socket.off("economy_update", handleEconomyUpdate);
-      socket.off("round_result", handleRoundResult);
-      socket.off("player_status_update", handleStatusUpdate);
-      socket.off("reveal_targets", handleReveal);
-      socket.off("start_betting_phase", handleStartBetting);
-    };
-  }, []);
+// ------------------- OXYGEN SYNC -------------------
+socket.on("oxygen_sync", (tick: number) => {
+  // tick is 0 -> 59
+  setOxygenProgress(tick);
+});
+
+return () => {
+  socket.off("room_created", handleRoomCreated);
+  socket.off("new_round_start", handleNewRound);
+  socket.off("timer_sync", handleTimerSync);
+  socket.off("economy_update", handleEconomyUpdate);
+  socket.off("round_result", handleRoundResult);
+  socket.off("player_status_update", handleStatusUpdate);
+  socket.off("reveal_targets", handleReveal);
+  socket.off("start_betting_phase", handleStartBetting);
+
+  // Remove oxygen listener on cleanup
+  socket.off("oxygen_sync");
+};
+}, [])
 };

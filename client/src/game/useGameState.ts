@@ -68,8 +68,10 @@ export const useGameState = () => {
 
   const [myLocked, setMyLocked] = useState(false);
 
-  const [myWins, setMyWins] = useState(0);             // <--- NEW
-  const [opponentWins, setOpponentWins] = useState(0); // <--- NEW
+  const [myWins, setMyWins] = useState(0);            
+  const [opponentWins, setOpponentWins] = useState(0); 
+
+  const [oxygenProgress, setOxygenProgress] = useState(0);
 
   // 1. SOCKET EVENTS
 useSocketEvents({
@@ -91,7 +93,8 @@ useSocketEvents({
     setOpponentTargetValue,
     setMyLocked,
     setMyWins,       
-    setOpponentWins  
+    setOpponentWins,
+    setOxygenProgress  
   });
 
   // 2. LOCAL TIMER
@@ -153,7 +156,11 @@ useSocketEvents({
       
       myWins,       
       opponentWins, 
+
+      oxygenProgress
     },
+
+    setPhase,
 
     setLocalStep,
     setSelectedTargetId,

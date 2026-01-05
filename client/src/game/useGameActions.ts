@@ -1,6 +1,7 @@
 // client/src/game/useGameActions.ts
 import { socket } from "../network/socketBridge";
 import { LocalStep, canTransition } from "./localSteps";
+import type { GamePhase } from "../../../shared/types";
 
 interface Params {
   localStep: LocalStep;
@@ -16,6 +17,10 @@ interface Params {
 
   selectedCardIds: string[];
   setSelectedCardIds: (ids: string[]) => void;
+
+  // 🔑 Added for Next Round handling
+  gameOver: any;
+  setPhase: (phase: GamePhase) => void;
 }
 
 export const useGameActions = ({
@@ -27,7 +32,9 @@ export const useGameActions = ({
   selectedTargetId,
   setSelectedTargetId,
   selectedCardIds,
-  setSelectedCardIds
+  setSelectedCardIds,
+  gameOver,
+  setPhase
 }: Params) => {
   /* -------------------------------------------------- */
   /* ---------------- ROOM ACTIONS -------------------- */
@@ -47,18 +54,15 @@ export const useGameActions = ({
   /* ---------------- TARGET SELECTION ---------------- */
   /* -------------------------------------------------- */
 
-  // NEW: Highlight only (no server interaction)
   const selectTarget = (targetId: string) => {
     if (localStep !== LocalStep.PICK_TARGET) return;
     setSelectedTargetId(targetId);
   };
 
-  // NEW: Explicit confirmation
   const confirmTarget = () => {
     if (!canTransition(localStep, LocalStep.BETTING)) return;
     if (!selectedTargetId) return;
 
-    // setLocalStep(LocalStep.BETTING);
     socket.emit("action_target", { targetId: selectedTargetId });
   };
 
@@ -92,7 +96,15 @@ export const useGameActions = ({
     socket.emit("action_submit", { cardIds: selectedCardIds });
   };
 
-  const requestNextRound = () => {
+  // 🔑 Next Round handler respecting gameOver
+  const nextRound = () => {
+    if (gameOver) {
+      console.log("[CLIENT] Match ended. Switching to Game Over screen.");
+      setPhase("GAME_OVER");
+      return;
+    }
+
+    console.log("[CLIENT] Requesting next round");
     socket.emit("next_round_request");
   };
 
@@ -112,15 +124,13 @@ export const useGameActions = ({
     createRoom,
     joinRoom,
 
-    // 🔑 NEW FLOW
     selectTarget,
     confirmTarget,
 
     placeBet,
     toggleCard,
     submitHand,
-    requestNextRound,
-
+    nextRound,        // 🔑 Added here
     toggleViewTable
   };
 };
