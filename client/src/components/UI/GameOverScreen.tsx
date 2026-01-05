@@ -42,7 +42,7 @@ export const GameOverScreen: React.FC<GameOverProps> = ({ winnerId, myId, reason
             {/* YOU */}
             <div style={{ textAlign: 'center' }}>
               <div style={{ color: '#888', fontSize: '0.9rem', marginBottom: 10, letterSpacing: 2 }}>
-                YOUR AIR
+                YOU
               </div>
               <div style={{ fontSize: '3rem', color: isWinner ? '#ffd700' : '#444', fontWeight: 'bold' }}>
                 {finalBios[myId] ?? 0}

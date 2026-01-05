@@ -3,7 +3,8 @@ import React from "react";
 import { socket } from "../../network/socketBridge";
 import { LocalStep } from "../../game/localSteps";
 import { ResultScreen } from "./ResultScreen";
-import { GameOverScreen } from "./GameOverScreen"; // ✅ The Update
+import { GameOverScreen } from "./GameOverScreen"; 
+import { Lobby } from "./Lobby";
 
 interface OverlayProps {
   state: any;   // Pass the full state or specific parts
@@ -38,23 +39,10 @@ export const GameOverlays: React.FC<OverlayProps> = ({ state, actions }) => {
   // 3. LOBBY
   if (state.phase === "LOBBY" && !state.roomId) {
     return (
-      <div style={overlayStyle}>
-        <div style={panelStyle}>
-          <h1 style={{color: '#ffd700', marginBottom: 20}}>AIR POKER</h1>
-          <button onClick={actions.createRoom} style={btnStyle}>
-            CREATE ROOM
-          </button>
-          <button
-            onClick={() => {
-              const id = prompt("Room ID");
-              if (id) actions.joinRoom(id);
-            }}
-            style={{ ...btnStyle, marginLeft: 20 }}
-          >
-            JOIN ROOM
-          </button>
-        </div>
-      </div>
+      <Lobby 
+        onCreate={actions.createRoom} 
+        onJoin={actions.joinRoom} 
+      />
     );
   }
 
