@@ -52,7 +52,7 @@ export const NumberCard3D: React.FC<NumberCardProps> = ({
 
   const showBack = value === 0; 
   const isOpponent = position[2] < 0; // Opponent is at z=-2
-  const fontUrl = "Cinzel-Regular.woff2";
+  const fontUrl = "Cinzel-Regular.ttf";
 
   // ⚡️ ANIMATION PHYSICS ⚡️
   const { pos, rot, scale } = useSpring({
